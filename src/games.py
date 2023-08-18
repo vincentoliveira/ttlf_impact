@@ -7,6 +7,7 @@
 from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
+from src.teams import Teams
 import re
 import pandas as pd
 import sys
@@ -63,11 +64,11 @@ class Games(metaclass=SingletonMeta):
         return list_games_df
 
     def get_box_score(self, game_id, game_df):
+        teams = Teams()
         if game_id not in self.box_scores:
             print("[Game] Retrieve box score for game: " + game_id)
             box_score = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
             box_score_df = box_score.get_data_frames()[0]
-            box_score_df = box_score_df.drop(columns=['TEAM_ABBREVIATION', 'TEAM_CITY', 'PLAYER_NAME', 'NICKNAME', 'START_POSITION'])
             box_score_df = box_score_df.fillna(0)
             box_score_df = self.calculate_ttlf_score(box_score_df)
 
@@ -88,8 +89,19 @@ class Games(metaclass=SingletonMeta):
                 matchup = re.sub(matchup_alt_pattern, matchup_replacement, game_df['MATCHUP'])
                 matchup_alt = game_df['MATCHUP']
 
+            opponent_id = None
+            if matchup.startswith(game_df['TEAM_ABBREVIATION']):
+                opponent = matchup[-3:]
+                opponent_id = teams.get_team_id_from_abbreviation(opponent)
+            elif matchup.endswith(game_df['TEAM_ABBREVIATION']):
+                opponent = matchup[:3]
+                opponent_id = teams.get_team_id_from_abbreviation(opponent)
+
             box_score_df['MATCHUP'] = matchup
             box_score_df['MATCHUP_ALT'] = matchup_alt
+            box_score_df['OPPONENT_TEAM_ID'] = opponent_id
+
+            box_score_df = box_score_df.drop(columns=['TEAM_ABBREVIATION', 'TEAM_CITY', 'PLAYER_NAME', 'NICKNAME', 'START_POSITION'])
 
             self.box_scores[game_id] = box_score_df
 
@@ -122,6 +134,10 @@ class Games(metaclass=SingletonMeta):
         has_error = False
         has_new_row = False
         for i, game_df in list_games_df.iterrows():
+            if has_new_row and i % self.buffer_size == 0:
+                self.save_database()
+                has_new_row = False
+
             print("[Games] Loading in progress: " + str(i + 1) + " / " + str(len(list_games_df.index)))
             game_id = game_df['GAME_ID']
             if game_id in self.box_scores:
@@ -135,10 +151,6 @@ class Games(metaclass=SingletonMeta):
                     has_error = True
                     print("[Error] Failed to retrieve data for game: " + game_id, file=sys.stderr)
                     print(error, file=sys.stderr)
-
-            if has_new_row and i % self.buffer_size == 0:
-                self.save_database()
-                has_new_row = False
 
         self.save_database()
 

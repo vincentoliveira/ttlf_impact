@@ -53,6 +53,10 @@ class Players(metaclass=SingletonMeta):
         has_error = False
         has_new_row = False
         for i, player_id in enumerate(player_id_list):
+            if has_new_row and i % self.buffer_size == 0:
+                self.save_database()
+                has_new_row = False
+
             print("[Players] Loading in progress: " + str(i + 1) + " / " + str(len(player_id_list)))
             if player_id in self.players:
                 all_player_info.append(self.players[player_id])
@@ -65,10 +69,6 @@ class Players(metaclass=SingletonMeta):
                     has_error = True
                     print("[Error] Failed to retrieve info for players: " + str(player_id), file=sys.stderr)
                     print(error, file=sys.stderr)
-
-            if has_new_row and i % self.buffer_size == 0:
-                self.save_database()
-                has_new_row = False
 
         self.save_database()
 

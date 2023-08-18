@@ -47,7 +47,7 @@ def ttlf_lab_impact_start():
     season = "2022-23"
     season_type = 'SR'
     day = "03/02/2023"
-    games = Games()
+    games = Games(buffer_size=16)
     teams = Teams()
     players = Players()
     predictions = Impact()
