@@ -7,6 +7,7 @@
 from src.singleton_meta import SingletonMeta
 from datetime import datetime, timedelta
 import pandas as pd
+import sys
 
 class Impact(metaclass=SingletonMeta):
     def __init__(self, impact_filename='databases/impact_{day}.xlsx'):
@@ -25,11 +26,30 @@ class Impact(metaclass=SingletonMeta):
         ten_days_ago = (date_object - timedelta(days=10)).strftime("%Y-%m-%d")
         thirty_days_ago = (date_object - timedelta(days=30)).strftime("%Y-%m-%d")
 
+        home_teams = game_df['TEAM_HOME_ID'].unique().tolist()
+        away_teams = game_df['TEAM_AWAY_ID'].unique().tolist()
+
+        print("[Impact] Calculate impact: " + day)
+
         impact_table = []
         for i, player in player_df.iterrows():
             player_id = player['PERSON_ID']
             team_id = player['TEAM_ID']
-            game_id = game_df[game_df['TEAM_ID'] == player['TEAM_ID']]['GAME_ID'].values[0]
+
+            this_game_df = None
+            this_game_is_home = True
+            opponent_team_id = None
+            if player['TEAM_ID'] in home_teams:
+                this_game_df = game_df[game_df['TEAM_HOME_ID'] == player['TEAM_ID']].iloc[0]
+                opponent_team_id = this_game_df['TEAM_AWAY_ID']
+                this_game_is_home = True
+            elif player['TEAM_ID'] in away_teams:
+                this_game_df = game_df[game_df['TEAM_AWAY_ID'] == player['TEAM_ID']].iloc[0]
+                opponent_team_id = this_game_df['TEAM_HOME_ID']
+                this_game_is_home = False
+            else:
+                print('[Impact] Error: team " + " do not play today', file=sys.stderr)
+                continue
 
             team_box_score_df = box_score_df[box_score_df['TEAM_ID'] == team_id].sort_values(['GAME_DATE'], ascending=False)
             team_last_four_game_dates = team_box_score_df['GAME_DATE'].unique().tolist()
@@ -38,7 +58,7 @@ class Impact(metaclass=SingletonMeta):
             last_thirty_days_box_score = player_box_score[player_box_score['GAME_DATE'] >= thirty_days_ago]
 
             # General information
-            player_name = player['DISPLAY_FIRST_LAST']
+            player_name = player['FIRST_NAME'] + " " + player['LAST_NAME']
             last_game_date_tomorrow = (datetime.strptime(player_box_score['GAME_DATE'].values[0], "%Y-%m-%d") + timedelta(days=1)).strftime("%m/%d/%Y") \
                 if len(player_box_score['TTFL_SCORE']) >= 1 else False
             is_back_to_back = last_game_date_tomorrow and last_game_date_tomorrow == day
@@ -73,8 +93,7 @@ class Impact(metaclass=SingletonMeta):
                 if last_4_game_box_score is not None and len(last_4_game_box_score['TTFL_SCORE']) >= 1 else None
 
             # Match up
-            match_up = game_df[game_df['TEAM_ID'] == player['TEAM_ID']]['MATCHUP'].values[0]
-            opponent_team_id = game_df[(game_df['GAME_ID'] == game_id) & (game_df['TEAM_ID'] != player['TEAM_ID'])]['TEAM_ID'].values[0]
+            match_up = this_game_df['MATCHUP']
             opponent_box_score_df = box_score_df[box_score_df['TEAM_ID'] == opponent_team_id].sort_values(['GAME_DATE'], ascending=False)
             opponent_last_game_date = opponent_box_score_df['GAME_DATE'].unique().tolist()
             last_game_date_tomorrow = (datetime.strptime(opponent_last_game_date[0], "%Y-%m-%d") + timedelta(days=1)).strftime("%m/%d/%Y") if len(opponent_last_game_date) >= 1 else False
@@ -88,6 +107,15 @@ class Impact(metaclass=SingletonMeta):
                 if len(match_up_history_df['TTFL_SCORE']) >= 2 else None
             last_3_match_up = match_up_history_df['TTFL_SCORE'].values[2] \
                 if len(match_up_history_df['TTFL_SCORE']) >= 3 else None
+
+            # Impact Position
+            player_position = player['POSITION']
+
+            # Impact Home Away
+            player_home_away = "Home" if this_game_is_home else "Away"
+
+            # Impact Back to Back
+
 
             impact_table.append({
                 'PLAYER_ID': player_id,
@@ -110,6 +138,8 @@ class Impact(metaclass=SingletonMeta):
                 'LAST_MATCHUP': last_match_up,
                 'LAST_2_MATCHUP': last_2_match_up,
                 'LAST_3_MATCHUP': last_3_match_up,
+                'PLAYER_POSITION': player_position,
+                'HOME_AWAY': player_home_away,
             })
 
         self.save_impact(day, impact_table)

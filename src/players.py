@@ -30,17 +30,23 @@ class Players(metaclass=SingletonMeta):
 
     def save_database(self):
         print("Writing players database file to: " + self.database_filename)
-        all_box_scores_df = pd.concat(self.players.values())
-        all_box_scores_df.to_excel(self.database_filename, index=False)
+        all_players_df = pd.concat(self.players.values())
+        all_players_df = all_players_df.sort_values(['PERSON_ID'], ascending=False)
+        all_players_df.to_excel(self.database_filename, index=False)
 
     def get_player_info(self, player_id):
         if player_id not in self.players:
             print("[Player] Retrieve info for player: " + str(player_id))
             player_info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
             player_info_df = player_info.get_data_frames()[0]
+            player_info_df = player_info_df.drop(columns=['DISPLAY_FIRST_LAST', 'DISPLAY_LAST_COMMA_FIRST', 'DISPLAY_FI_LAST', 'PLAYER_SLUG', 'LAST_AFFILIATION', 'ROSTERSTATUS', 'GAMES_PLAYED_CURRENT_SEASON_FLAG', 'TEAM_CODE', 'TEAM_CITY', 'PLAYERCODE', 'FROM_YEAR', 'TO_YEAR', 'DLEAGUE_FLAG', 'NBA_FLAG', 'GAMES_PLAYED_FLAG'])
             self.players[player_id] = player_info_df
 
         return self.players[player_id]
+
+    def get_player_position(self, player_id):
+        player_info = self.get_player_info(player_id)
+        return player_info['POSITION'].values[0] if len(player_info['POSITION']) >= 1 else None
 
     def get_roster_by_team_id(self, team_id):
         print("[Player] Retrieve roster for team: " + str(team_id))

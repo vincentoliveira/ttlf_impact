@@ -7,6 +7,7 @@ from src.games import Games
 from src.teams import Teams
 from src.players import Players
 from src.impact import Impact
+import pandas as pd
 
 
 def refresh_databases(season, games, teams, players):
@@ -33,7 +34,7 @@ def refresh_databases(season, games, teams, players):
         print("Fetching teams success.")
     else:
         print("Fetching teams done with errors.")
-    if team_succeed:
+    if player_succeed:
         print("Fetching players success.")
     else:
         print("Fetching players done with errors.")
@@ -45,25 +46,25 @@ def refresh_databases(season, games, teams, players):
 
 def ttlf_lab_impact_start():
     season = "2022-23"
-    season_type = 'SR'
+    season_type = 'RegularSeason'
     day = "03/02/2023"
-    games = Games(buffer_size=16)
     teams = Teams()
     players = Players()
-    predictions = Impact()
+    games = Games(season)
+    impact = Impact()
 
     # 1. Refresh databases
     refresh_databases(season, games, teams, players)
 
     # 2. Fetch day games
-    today_games_df = games.list_daily_games(day)
-    today_team_ids = today_games_df['TEAM_ID'].tolist()
+    today_games_df = games.list_daily_games(day, forceRefresh=True)
+    today_team_ids = today_games_df['TEAM_HOME_ID'].tolist() + today_games_df['TEAM_AWAY_ID'].tolist()
     today_players_df = players.fetch_player_by_teams(today_team_ids)
     today_player_ids = today_players_df['PERSON_ID'].to_list()
     today_player_box_scores = games.get_box_scores_for_players(today_player_ids, day, season_type)
 
     # 3. Compute prediction
-    predictions.compute_impact(day, today_games_df, today_players_df, today_player_box_scores)
+    impact.compute_impact(day, today_games_df, today_players_df, today_player_box_scores)
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':

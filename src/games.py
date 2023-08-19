@@ -8,100 +8,215 @@ from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
 from src.teams import Teams
+from src.players import Players
 import re
 import pandas as pd
 import sys
 from datetime import date, datetime
 
 class Games(metaclass=SingletonMeta):
-    def __init__(self, current_season='2022-23', database_filename='databases/box_scores.xlsx', buffer_size=256):
+    def __init__(self,
+                 current_season='2022-23',
+                 box_score_database_filename='databases/box_scores_{season}.xlsx',
+                 calendar_database_filename='databases/calendar_{season}.xlsx',
+                 buffer_size=256
+                 ):
         self.box_scores = {}
+        self.calendar = {}
         self.current_season = current_season
-        self.database_filename = database_filename
+        self.box_score_database_filename = box_score_database_filename
+        self.calendar_database_filename = calendar_database_filename
         self.buffer_size = buffer_size
 
         # load initial database
-        self.load_database()
+        self.load_all_databases(current_season)
 
-    def load_database(self):
+    def load_all_databases(self, season):
+        self.load_calendar(season)
+        self.load_box_scores(season)
+
+    def load_calendar(self, season):
+        calendar_filename = self.calendar_database_filename.replace('{season}', season)
         try:
-            existing_box_scores = pd.read_excel(self.database_filename, dtype='object')
+            existing_season_calendar_df = pd.read_excel(calendar_filename, dtype='object')
+            self.calendar[season] = existing_season_calendar_df
+        except FileNotFoundError:
+            print("Failed to load existing calendar database: File " + calendar_filename + " not found.", file=sys.stderr)
+        except Exception as e:
+            print("Failed to load calendar score database: " + str(e), file=sys.stderr)
+
+    def load_box_scores(self, current_season):
+        box_score_filename = self.box_score_database_filename.replace('{season}', current_season)
+        try:
+            existing_box_scores = pd.read_excel(box_score_filename, dtype='object')
             game_id_list = existing_box_scores['GAME_ID'].unique().tolist()
             for game_id in game_id_list:
                 self.box_scores[game_id] = existing_box_scores[existing_box_scores['GAME_ID'] == game_id]
         except FileNotFoundError:
-            print("Failed to load existing box score database: File " + self.database_filename + " not found.", file=sys.stderr)
+            print("Failed to load existing box score database: File " + box_score_filename + " not found.", file=sys.stderr)
         except Exception as e:
             print("Failed to load existing box score database: " + str(e), file=sys.stderr)
 
-    def save_database(self):
-        print("Writing box score database file to: " + self.database_filename)
+    def save_calendar(self, season):
+        filename = self.calendar_database_filename.replace('{season}', season)
+        print("Writing calendar database file to: " + filename)
+        all_calendar_df = pd.concat(self.calendar.values())
+        all_calendar_df = all_calendar_df.sort_values(['GAME_DATE'], ascending=False)
+        all_calendar_df.to_excel(filename, index=False)
+
+    def save_box_scores(self, season):
+        filename = self.box_score_database_filename.replace('{season}', season)
+        print("Writing box score database file to: " + filename)
         all_box_scores_df = pd.concat(self.box_scores.values())
-        all_box_scores_df.to_excel(self.database_filename, index=False)
+        all_box_scores_df = all_box_scores_df.sort_values(['GAME_DATE'], ascending=False)
+        all_box_scores_df.to_excel(filename, index=False)
 
-    def list_daily_games(self, day=None, league=LeagueIDNullable.nba):
+    def enriched_game_list(self, season, raw_game_list_df):
+        raw_game_list_df = raw_game_list_df.drop(
+            columns=['MIN', 'PTS', 'FGM', 'FGA', 'FG_PCT', 'FG3M', 'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'FT_PCT', 'OREB',
+                     'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'PLUS_MINUS'])
+
+        enriched_game_list = {}
+        for i, game in raw_game_list_df.iterrows():
+            if game['GAME_ID'] in enriched_game_list:
+                if enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] is None:
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] = game['TEAM_ID']
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_NAME'] = game['TEAM_NAME']
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ABBREVIATION'] = game['TEAM_ABBREVIATION']
+                elif enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] is None:
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] = game['TEAM_ID']
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_NAME'] = game['TEAM_NAME']
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ABBREVIATION'] = game['TEAM_ABBREVIATION']
+            else:
+                season_type = None
+                if game['SEASON_ID'].startswith('1'):
+                    season_type = 'PreSeason'
+                elif game['SEASON_ID'].startswith('2'):
+                    season_type = 'RegularSeason'
+                elif game['SEASON_ID'].startswith('3'):
+                    season_type = 'AllStar'
+                elif game['SEASON_ID'].startswith('4'):
+                    season_type = 'PlayOff'
+                elif game['SEASON_ID'].startswith('5'):
+                    season_type = 'PlayIn'
+
+                matchup_pattern = r'\b([A-Z]+) vs. ([A-Z]+)\b'
+                matchup_alt_pattern = r'\b([A-Z]+) @ ([A-Z]+)\b'
+
+                team_home_id = None
+                team_away_id = None
+                team_home_name = None
+                team_away_name = None
+                team_home_abbreviation = None
+                team_away_abbreviation = None
+                matchup = None
+                if re.fullmatch(matchup_pattern, game['MATCHUP']):
+                    matchup = game['MATCHUP']
+                    team_home_id = game['TEAM_ID']
+                    team_home_name = game['TEAM_NAME']
+                    team_home_abbreviation = game['TEAM_ABBREVIATION']
+                elif re.fullmatch(matchup_alt_pattern, game['MATCHUP']):
+                    matchup_replacement = r'\2 vs. \1'
+                    matchup = re.sub(matchup_alt_pattern, matchup_replacement, game['MATCHUP'])
+                    team_away_id = game['TEAM_ID']
+                    team_away_name = game['TEAM_NAME']
+                    team_away_abbreviation = game['TEAM_ABBREVIATION']
+
+                enriched_game_list[game['GAME_ID']] = {
+                    'GAME_ID': game['GAME_ID'],
+                    'GAME_DATE': game['GAME_DATE'],
+                    'SEASON_ID': game['SEASON_ID'],
+                    'SEASON_TYPE': season_type,
+                    'SEASON_YEAR': season,
+                    'MATCHUP': matchup,
+                    'TEAM_HOME_ID': team_home_id,
+                    'TEAM_HOME_NAME': team_home_name,
+                    'TEAM_HOME_ABBREVIATION': team_home_abbreviation,
+                    'TEAM_AWAY_ID': team_away_id,
+                    'TEAM_AWAY_NAME': team_away_name,
+                    'TEAM_AWAY_ABBREVIATION': team_away_abbreviation,
+                }
+        return enriched_game_list
+
+    def list_daily_games(self, day=None, league=LeagueIDNullable.nba, forceRefresh=False):
         if not day:
-            day = date.today().strftime("%d/%m/%Y")
+            day = date.today().strftime("%m/%d/%Y")
+            filter_day = date.today().strftime("%Y-%m-%d")
+        else:
+            date_object = datetime.strptime(day, "%m/%d/%Y")
+            filter_day = date_object.strftime("%Y-%m-%d")
 
-        print("[Game] List game for this day: " + day)
+        if self.current_season in self.calendar:
+            season_games_df = self.calendar[self.current_season]
+            today_games_df = season_games_df[season_games_df['GAME_DATE'] == filter_day]
+
+            if len(today_games_df.index) > 0 and not forceRefresh:
+                return today_games_df
+
+        print("[Games] List game for this day: " + filter_day)
         list_games = leaguegamefinder.LeagueGameFinder(
+            season_nullable=self.current_season,
             date_from_nullable=day,
             date_to_nullable=day,
             league_id_nullable=league
         )
         list_games_df = list_games.get_data_frames()[0]
+        today_games = self.enriched_game_list(self.current_season, list_games_df)
 
-        return list_games_df
+        today_games_df = pd.DataFrame.from_dict(today_games.values())
+        today_games_df = today_games_df.sort_values(['GAME_DATE'], ascending=False)
 
-    def list_season_games(self, season=None):
+        if self.current_season in self.calendar:
+            calendar = self.calendar[self.current_season]
+            calendar.drop(calendar[calendar['GAME_DATE'] == filter_day].index, inplace=True)
+            self.current_season = pd.concat([calendar, today_games_df])
+            self.save_calendar(self.current_season)
+
+        return today_games_df
+
+    def list_season_games(self, season=None, force=False):
         if not season:
             season = self.current_season
 
-        print("[Game] List game for season: " + season)
-        list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season)
-        list_games_df = list_games.get_data_frames()[0]
+        print("[Games] List game for season: " + season)
 
-        return list_games_df
+        if season not in self.calendar or force:
+            list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season, league_id_nullable=LeagueIDNullable.nba)
+            season_raw_game_df = list_games.get_data_frames()[0]
+            season_games = self.enriched_game_list(season, season_raw_game_df)
 
-    def get_box_score(self, game_id, game_df):
+            season_calendar_df = pd.DataFrame.from_dict(season_games.values())
+
+            self.calendar[season] = season_calendar_df
+            self.save_calendar(season)
+
+        return self.calendar[season]
+
+    def get_box_score(self, game_id, game_info_df):
         teams = Teams()
+        players = Players()
+
+        home_id = game_info_df['TEAM_HOME_ID']
+        away_team_id = game_info_df['TEAM_AWAY_ID']
+        home_abbreviation = game_info_df['TEAM_HOME_ABBREVIATION']
+        away_abbreviation = game_info_df['TEAM_AWAY_ABBREVIATION']
         if game_id not in self.box_scores:
-            print("[Game] Retrieve box score for game: " + game_id)
+            print("[Games] Retrieve box score for game: " + game_id)
             box_score = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
             box_score_df = box_score.get_data_frames()[0]
             box_score_df = box_score_df.fillna(0)
             box_score_df = self.calculate_ttlf_score(box_score_df)
 
-            box_score_df['GAME_DATE'] = game_df['GAME_DATE']
+            box_score_df['GAME_DATE'] = game_info_df['GAME_DATE']
+            box_score_df['SEASON'] = game_info_df['SEASON_YEAR']
+            box_score_df['SEASON_TYPE'] = game_info_df['SEASON_TYPE']
+            box_score_df['MATCHUP'] = game_info_df['MATCHUP']
+            box_score_df['OPPONENT_TEAM_ID'] = box_score_df.apply(lambda player_box_score: away_team_id if player_box_score['TEAM_ID'] == home_id else home_id, axis=1)
+            box_score_df['OPPONENT_ABBREVIATION'] = box_score_df.apply(lambda player_box_score: away_abbreviation if player_box_score['TEAM_ID'] == home_id else home_abbreviation, axis=1)
+            box_score_df['HOME_AWAY'] = box_score_df.apply(lambda player_box_score: 'HOME' if player_box_score['TEAM_ID'] == home_id else 'AWAY', axis=1)
+            box_score_df['PLAYER_POSITION'] = box_score_df.apply(lambda player_box_score: players.get_player_position(player_box_score['PLAYER_ID']), axis=1)
 
-            matchup = None
-            matchup_alt = None
-
-            matchup_pattern = r'\b([A-Z]+) vs. ([A-Z]+)\b'
-            matchup_alt_pattern = r'\b([A-Z]+) @ ([A-Z]+)\b'
-
-            if re.fullmatch(matchup_pattern, game_df['MATCHUP']):
-                matchup_alt_replacement = r'\2 @ \1'
-                matchup = game_df['MATCHUP']
-                matchup_alt = re.sub(matchup_pattern, matchup_alt_replacement, game_df['MATCHUP'])
-            elif re.fullmatch(matchup_alt_pattern, game_df['MATCHUP']):
-                matchup_replacement = r'\2 vs. \1'
-                matchup = re.sub(matchup_alt_pattern, matchup_replacement, game_df['MATCHUP'])
-                matchup_alt = game_df['MATCHUP']
-
-            opponent_id = None
-            if matchup.startswith(game_df['TEAM_ABBREVIATION']):
-                opponent = matchup[-3:]
-                opponent_id = teams.get_team_id_from_abbreviation(opponent)
-            elif matchup.endswith(game_df['TEAM_ABBREVIATION']):
-                opponent = matchup[:3]
-                opponent_id = teams.get_team_id_from_abbreviation(opponent)
-
-            box_score_df['MATCHUP'] = matchup
-            box_score_df['MATCHUP_ALT'] = matchup_alt
-            box_score_df['OPPONENT_TEAM_ID'] = opponent_id
-
-            box_score_df = box_score_df.drop(columns=['TEAM_ABBREVIATION', 'TEAM_CITY', 'PLAYER_NAME', 'NICKNAME', 'START_POSITION'])
+            box_score_df = box_score_df.drop(columns=['NICKNAME', 'START_POSITION', 'TEAM_CITY', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
 
             self.box_scores[game_id] = box_score_df
 
@@ -135,7 +250,7 @@ class Games(metaclass=SingletonMeta):
         has_new_row = False
         for i, game_df in list_games_df.iterrows():
             if has_new_row and i % self.buffer_size == 0:
-                self.save_database()
+                self.save_box_scores(season)
                 has_new_row = False
 
             print("[Games] Loading in progress: " + str(i + 1) + " / " + str(len(list_games_df.index)))
@@ -152,7 +267,7 @@ class Games(metaclass=SingletonMeta):
                     print("[Error] Failed to retrieve data for game: " + game_id, file=sys.stderr)
                     print(error, file=sys.stderr)
 
-        self.save_database()
+        self.save_box_scores(season)
 
         return [pd.concat(all_box_scores), not has_error]
 
@@ -163,15 +278,14 @@ class Games(metaclass=SingletonMeta):
             date_object = datetime.strptime(before_day, "%m/%d/%Y")
             before_day = date_object.date().isoformat()
 
-        game_prefix = ''
-        if season_type == 'SR':
-            game_prefix = '002'
-        elif season_type == 'PO':
-            game_prefix = '004'
+        print("[Games] Get box scores for today players : " + before_day)
+
+        if not season_type:
+            season_type = "RegularSeason"
 
         all_box_scores_df = pd.concat(self.box_scores.values())
         return all_box_scores_df[
             (all_box_scores_df['PLAYER_ID'].isin(player_id_list))
             & (all_box_scores_df['GAME_DATE'] < before_day)
-            & (all_box_scores_df['GAME_ID'].str.startswith(game_prefix))
+            & (all_box_scores_df['SEASON_TYPE'] == season_type)
         ]
