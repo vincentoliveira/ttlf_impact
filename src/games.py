@@ -7,7 +7,6 @@
 from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
-from src.teams import Teams
 from src.players import Players
 import re
 import pandas as pd
@@ -216,13 +215,14 @@ class Games(metaclass=SingletonMeta):
         return self.calendar[season]
 
     def get_box_score(self, game_id, game_info_df):
-        teams = Teams()
         players = Players()
 
         home_id = game_info_df['TEAM_HOME_ID']
         away_team_id = game_info_df['TEAM_AWAY_ID']
         home_abbreviation = game_info_df['TEAM_HOME_ABBREVIATION']
         away_abbreviation = game_info_df['TEAM_AWAY_ABBREVIATION']
+        home_b2b = game_info_df['HOME_BACK_TO_BACK']
+        away_b2b = game_info_df['AWAY_BACK_TO_BACK']
         if game_id not in self.box_scores:
             print("[Games] Retrieve box score for game: " + game_id)
             box_score = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
@@ -238,6 +238,7 @@ class Games(metaclass=SingletonMeta):
             box_score_df['OPPONENT_ABBREVIATION'] = box_score_df.apply(lambda player_box_score: away_abbreviation if player_box_score['TEAM_ID'] == home_id else home_abbreviation, axis=1)
             box_score_df['HOME_AWAY'] = box_score_df.apply(lambda player_box_score: 'HOME' if player_box_score['TEAM_ID'] == home_id else 'AWAY', axis=1)
             box_score_df['PLAYER_POSITION'] = box_score_df.apply(lambda player_box_score: players.get_player_position(player_box_score['PLAYER_ID']), axis=1)
+            box_score_df['BACK_TO_BACK'] = box_score_df.apply(lambda player_box_score: home_b2b if player_box_score['TEAM_ID'] == home_id else away_b2b, axis=1)
 
             box_score_df = box_score_df.drop(columns=['NICKNAME', 'START_POSITION', 'TEAM_CITY', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
 
