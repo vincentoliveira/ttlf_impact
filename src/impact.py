@@ -124,10 +124,12 @@ class Impact(metaclass=SingletonMeta):
 
             # Impact Back to Back
             player_b2b_impact = None
+            nb_b2b_played = None
             if is_back_to_back:
                 player_b2b_box_score = season_box_score[season_box_score['BACK_TO_BACK']]
                 player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
                 player_b2b_impact = player_b2b_average - season_average
+                nb_b2b_played = len(player_b2b_box_score.index)
 
             impact_table.append({
                 'PLAYER_ID': player_id,
@@ -156,6 +158,7 @@ class Impact(metaclass=SingletonMeta):
                 'AWAY_AVG': away_average,
                 'HOME_AWAY_IMPACT': home_away_impact,
                 'BACK_TO_BACK_IMPACT': player_b2b_impact,
+                'NB_BACK_TO_BACK_PLAYED': nb_b2b_played,
             })
 
         self.save_impact(day, impact_table)
