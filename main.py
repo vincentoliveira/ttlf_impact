@@ -64,7 +64,7 @@ def ttlf_lab_impact_start():
     today_player_box_scores = games.get_box_scores_for_players(today_player_ids, day, season_type)
 
     # 3. Compute prediction
-    impact.compute_impact(day, today_games_df, today_players_df, today_player_box_scores)
+    impact.compute_impact(day, season, today_games_df, today_players_df, today_player_box_scores)
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':

@@ -164,12 +164,13 @@ class Games(metaclass=SingletonMeta):
         today_games = self.enriched_game_list(self.current_season, list_games_df)
 
         today_games_df = pd.DataFrame.from_dict(today_games.values())
-        today_games_df = today_games_df.sort_values(['GAME_DATE'], ascending=False)
+        if len(today_games_df.index) > 0:
+            today_games_df = today_games_df.sort_values(['GAME_DATE'], ascending=False)
 
         if self.current_season in self.calendar:
             calendar = self.calendar[self.current_season]
             calendar.drop(calendar[calendar['GAME_DATE'] == filter_day].index, inplace=True)
-            self.current_season = pd.concat([calendar, today_games_df])
+            self.calendar[self.current_season] = pd.concat([calendar, today_games_df])
             self.save_calendar(self.current_season)
 
         return today_games_df

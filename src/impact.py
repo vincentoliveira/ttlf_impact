@@ -21,7 +21,7 @@ class Impact(metaclass=SingletonMeta):
         impact_df = pd.DataFrame.from_records(impact_table).sort_values(['SEASON_AVG'], ascending=False)
         impact_df.to_excel(filename, index=False)
 
-    def compute_impact(self, day, game_df, player_df, box_score_df):
+    def compute_impact(self, day, season, game_df, player_df, box_score_df):
         date_object = datetime.strptime(day, "%m/%d/%Y")
         ten_days_ago = (date_object - timedelta(days=10)).strftime("%Y-%m-%d")
         thirty_days_ago = (date_object - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -54,8 +54,6 @@ class Impact(metaclass=SingletonMeta):
             team_box_score_df = box_score_df[box_score_df['TEAM_ID'] == team_id].sort_values(['GAME_DATE'], ascending=False)
             team_last_four_game_dates = team_box_score_df['GAME_DATE'].unique().tolist()
             player_box_score = box_score_df[box_score_df['PLAYER_ID'] == player_id].sort_values(['GAME_DATE'], ascending=False)
-            last_ten_days_box_score = player_box_score[player_box_score['GAME_DATE'] >= ten_days_ago]
-            last_thirty_days_box_score = player_box_score[player_box_score['GAME_DATE'] >= thirty_days_ago]
 
             # General information
             player_name = player['FIRST_NAME'] + " " + player['LAST_NAME']
@@ -64,7 +62,12 @@ class Impact(metaclass=SingletonMeta):
             is_back_to_back = last_game_date_tomorrow and last_game_date_tomorrow == day
 
             # Average
-            season_average = player_box_score['TTFL_SCORE'].mean()
+            season_box_score = player_box_score[(player_box_score['SEASON'] == season)
+                                                & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
+                                                & (player_box_score['MIN'] != 0)]
+            last_ten_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= ten_days_ago]
+            last_thirty_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= thirty_days_ago]
+            season_average = season_box_score['TTFL_SCORE'].mean()
             last_ten_days_average = last_ten_days_box_score['TTFL_SCORE'].mean()
             last_thirty_days_average = last_thirty_days_box_score['TTFL_SCORE'].mean()
 
@@ -113,6 +116,11 @@ class Impact(metaclass=SingletonMeta):
 
             # Impact Home Away
             player_home_away = "Home" if this_game_is_home else "Away"
+            home_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'HOME']
+            away_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'AWAY']
+            home_average = home_box_score['TTFL_SCORE'].mean()
+            away_average = away_box_score['TTFL_SCORE'].mean()
+            home_away_impact = home_average - season_average if this_game_is_home else away_average - season_average
 
             # Impact Back to Back
 
@@ -135,11 +143,14 @@ class Impact(metaclass=SingletonMeta):
                 'LAST_GAME': last_game,
                 'MATCHUP': match_up,
                 'OPPONENT_B2B': opponent_back_to_back,
-                'LAST_MATCHUP': last_match_up,
-                'LAST_2_MATCHUP': last_2_match_up,
                 'LAST_3_MATCHUP': last_3_match_up,
+                'LAST_2_MATCHUP': last_2_match_up,
+                'LAST_MATCHUP': last_match_up,
                 'PLAYER_POSITION': player_position,
                 'HOME_AWAY': player_home_away,
+                'HOME_AVG': home_average,
+                'AWAY_AVG': away_average,
+                'HOME_AWAY_IMPACT': home_away_impact
             })
 
         self.save_impact(day, impact_table)
