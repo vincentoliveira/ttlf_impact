@@ -21,6 +21,98 @@ class Impact(metaclass=SingletonMeta):
         impact_df = pd.DataFrame.from_records(impact_table).sort_values(['SEASON_AVG'], ascending=False)
         impact_df.to_excel(filename, index=False)
 
+    def compute_team_position_impact(self, game_df, box_score_df):
+        home_teams = game_df['TEAM_HOME_ID'].unique().tolist()
+        away_teams = game_df['TEAM_AWAY_ID'].unique().tolist()
+        teams = home_teams + away_teams
+
+        team_impact_table = {}
+        for team_id in teams:
+            opponent_box_scores = box_score_df[(box_score_df['OPPONENT_TEAM_ID'] == team_id) & (box_score_df['MIN'] != 0)]
+            position_impact_table = opponent_box_scores.groupby(['PLAYER_POSITION'])['TTFL_SCORE'].mean()
+            team_impact_table[team_id] = position_impact_table
+
+        return team_impact_table
+
+    def get_position_short(self, position):
+        if position == 'Guard':
+            return 'G'
+        elif position == 'Guard-Forward':
+            return 'G-F'
+        elif position == 'Forward-Guard':
+            return 'F-G'
+        elif position == 'Forward':
+            return 'F'
+        elif position == 'Forward-Center':
+            return 'F-C'
+        elif position == 'Center-Forward':
+            return 'C-F'
+        elif position == 'Center':
+            return 'C'
+
+    def get_team_position_score(self, position, team_score):
+        if position == 'Guard':
+            guard_score = team_score['Guard']
+            guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            return 0.6 * guard_score \
+                + 0.3 * guard_forward_score \
+                + 0.1 * forward_guard_score
+        elif position == 'Guard-Forward':
+            guard_score = team_score['Guard']
+            guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_score = team_score['Forward']
+            return 0.4 * guard_forward_score \
+                + 0.3 * guard_score \
+                + 0.2 * forward_guard_score \
+                + 0.1 * forward_score
+        elif position == 'Forward-Guard':
+            guard_score = team_score['Guard']
+            guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_score = team_score['Forward']
+            return 0.4 * forward_guard_score \
+                + 0.3 * forward_score \
+                + 0.2 * guard_forward_score \
+                + 0.1 * guard_score
+        elif position == 'Forward':
+            guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_score = team_score['Forward']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            return 0.4 * forward_score \
+                + 0.2 * forward_guard_score \
+                + 0.2 * forward_center_score \
+                + 0.1 * guard_forward_score \
+                + 0.1 * center_forward_score
+        elif position == 'Forward-Center':
+            forward_score = team_score['Forward']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            center_score = team_score['Center']
+            return 0.4 * forward_center_score \
+                + 0.3 * forward_score \
+                + 0.2 * center_forward_score \
+                + 0.1 * center_score
+        elif position == 'Center-Forward':
+            forward_score = team_score['Forward']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            center_score = team_score['Center']
+            return 0.4 * center_forward_score \
+                + 0.3 * center_score \
+                + 0.2 * forward_center_score \
+                + 0.1 * forward_score
+        elif position == 'Center':
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            center_score = team_score['Center']
+            return 0.6 * center_score \
+                + 0.3 * center_forward_score \
+                + 0.1 * forward_center_score
+
     def compute_impact(self, day, season, game_df, player_df, box_score_df):
         date_object = datetime.strptime(day, "%m/%d/%Y")
         ten_days_ago = (date_object - timedelta(days=10)).strftime("%Y-%m-%d")
@@ -31,6 +123,10 @@ class Impact(metaclass=SingletonMeta):
 
         print("[Impact] Calculate impact: " + day)
 
+        team_position_impact_table = self.compute_team_position_impact(game_df, box_score_df)
+        played_game_box_score_df = box_score_df[box_score_df['MIN'] != 0]
+        global_position_impact_table = played_game_box_score_df.groupby(['PLAYER_POSITION'])['TTFL_SCORE'].mean()
+
         impact_table = []
         for i, player in player_df.iterrows():
             player_id = player['PERSON_ID']
@@ -39,13 +135,16 @@ class Impact(metaclass=SingletonMeta):
             this_game_df = None
             this_game_is_home = True
             opponent_team_id = None
+            opponent_team_abbreviation = None
             if player['TEAM_ID'] in home_teams:
                 this_game_df = game_df[game_df['TEAM_HOME_ID'] == player['TEAM_ID']].iloc[0]
                 opponent_team_id = this_game_df['TEAM_AWAY_ID']
+                opponent_team_abbreviation = this_game_df['TEAM_AWAY_ABBREVIATION']
                 this_game_is_home = True
             elif player['TEAM_ID'] in away_teams:
                 this_game_df = game_df[game_df['TEAM_AWAY_ID'] == player['TEAM_ID']].iloc[0]
                 opponent_team_id = this_game_df['TEAM_HOME_ID']
+                opponent_team_abbreviation = this_game_df['TEAM_HOME_ABBREVIATION']
                 this_game_is_home = False
             else:
                 print('[Impact] Error: team " + " do not play today', file=sys.stderr)
@@ -113,6 +212,11 @@ class Impact(metaclass=SingletonMeta):
 
             # Impact Position
             player_position = player['POSITION']
+            player_position_short = self.get_position_short(player_position)
+            opponent_position_score_table = team_position_impact_table[opponent_team_id]
+            opponent_position_score = self.get_team_position_score(player_position, opponent_position_score_table)
+            global_position_score = global_position_impact_table[player_position]
+            opponent_position_impact = opponent_position_score - global_position_score
 
             # Impact Home Away
             player_home_away = "Home" if this_game_is_home else "Away"
@@ -152,7 +256,8 @@ class Impact(metaclass=SingletonMeta):
                 'LAST_3_MATCHUP': last_3_match_up,
                 'LAST_2_MATCHUP': last_2_match_up,
                 'LAST_MATCHUP': last_match_up,
-                'PLAYER_POSITION': player_position,
+                'PLAYER_POSITION': player_position_short + " vs. " + opponent_team_abbreviation,
+                'POSITION_IMPACT': opponent_position_impact,
                 'HOME_AWAY': player_home_away,
                 'HOME_AVG': home_average,
                 'AWAY_AVG': away_average,

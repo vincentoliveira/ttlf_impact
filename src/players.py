@@ -80,7 +80,11 @@ class Players(metaclass=SingletonMeta):
 
         return [pd.concat(all_player_info), not has_error]
 
-    def fetch_player_by_teams(self, team_id_list):
+    def fetch_player_by_teams(self, team_id_list, force_refresh=False):
+        if not force_refresh:
+            all_players_df = pd.concat(self.players.values())
+            return all_players_df[all_players_df['TEAM_ID'].isin(team_id_list)]
+
         all_player_info = []
         has_change = False
         for i, team_id in enumerate(team_id_list):

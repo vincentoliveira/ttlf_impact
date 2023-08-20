@@ -7,7 +7,9 @@ from src.games import Games
 from src.teams import Teams
 from src.players import Players
 from src.impact import Impact
-import pandas as pd
+from datetime import date
+import sys
+import getopt
 
 
 def refresh_databases(season, games, teams, players, force_refresh=False):
@@ -44,28 +46,69 @@ def refresh_databases(season, games, teams, players, force_refresh=False):
     else:
         print("Ending with errors.")
 
-def ttlf_lab_impact_start():
-    season = "2022-23"
-    season_type = 'RegularSeason'
-    day = "03/02/2023"
+
+def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh=False):
+    if not day:
+        day = date.today().strftime("%m/%d/%Y")
+    if not season:
+        season = "2022-23"
+    if not season_type:
+        season_type = 'RegularSeason'
+
     teams = Teams()
     players = Players()
     games = Games(season)
     impact = Impact()
 
     # 1. Refresh databases
-    refresh_databases(season, games, teams, players, force_refresh=False)
+    refresh_databases(season, games, teams, players, force_refresh=force_refresh)
 
     # 2. Fetch day games
-    today_games_df = games.list_daily_games(day, force_refresh=True)
+    today_games_df = games.list_daily_games(day, force_refresh=force_refresh)
+    if len(today_games_df.index) == 0:
+        print('No game for this date: ' + day)
+        sys.exit()
+
     today_team_ids = today_games_df['TEAM_HOME_ID'].tolist() + today_games_df['TEAM_AWAY_ID'].tolist()
-    today_players_df = players.fetch_player_by_teams(today_team_ids)
+    today_players_df = players.fetch_player_by_teams(today_team_ids, force_refresh=force_refresh)
     today_player_ids = today_players_df['PERSON_ID'].to_list()
     today_player_box_scores = games.get_box_scores_for_players(today_player_ids, day, season_type)
 
     # 3. Compute prediction
     impact.compute_impact(day, season, today_games_df, today_players_df, today_player_box_scores)
 
+
+def print_help():
+    print('app.py -d <day_to_generate> -f <force_refresh> -s <season> -t <season_type>')
+    print('\t<day_to_generate> mm/dd/yyyy (default: today)')
+    print('\t<force_refresh> True or False (default: False)')
+    print('\t<season> yyyy-yy (default: 2022-23)')
+    print('\t<season_type> RegularSeason, PlayOff (default: RegularSeason)')
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    ttlf_lab_impact_start()
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hd:f:s:t:",
+                                   ["help", "day=", "force-refresh=", "season=", "season_type="])
+    except getopt.GetoptError:
+        print_help()
+        sys.exit(2)
+
+    arg_force_refresh = False
+    arg_day = None
+    arg_season = None
+    season_type = None
+
+    for opt, arg in opts:
+        if opt in ("-d", "--day"):
+            arg_day = arg
+        elif opt in ("-f", "--force-refresh"):
+            arg_force_refresh = bool(arg)
+        elif opt in ("-s", "--season"):
+            arg_season = arg
+        else:
+            print_help()
+            sys.exit()
+
+    ttlf_lab_impact_start(day=arg_day, force_refresh=arg_force_refresh)
