@@ -12,7 +12,7 @@ from src.players import Players
 import re
 import pandas as pd
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 class Games(metaclass=SingletonMeta):
     def __init__(self,
@@ -68,6 +68,7 @@ class Games(metaclass=SingletonMeta):
         filename = self.box_score_database_filename.replace('{season}', season)
         print("Writing box score database file to: " + filename)
         all_box_scores_df = pd.concat(self.box_scores.values())
+        all_box_scores_df = all_box_scores_df[all_box_scores_df['SEASON'] == season]
         all_box_scores_df = all_box_scores_df.sort_values(['GAME_DATE'], ascending=False)
         all_box_scores_df.to_excel(filename, index=False)
 
@@ -135,10 +136,12 @@ class Games(metaclass=SingletonMeta):
                     'TEAM_AWAY_ID': team_away_id,
                     'TEAM_AWAY_NAME': team_away_name,
                     'TEAM_AWAY_ABBREVIATION': team_away_abbreviation,
+                    'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                    'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
                 }
         return enriched_game_list
 
-    def list_daily_games(self, day=None, league=LeagueIDNullable.nba, forceRefresh=False):
+    def list_daily_games(self, day=None, league=LeagueIDNullable.nba, force_refresh=False):
         if not day:
             day = date.today().strftime("%m/%d/%Y")
             filter_day = date.today().strftime("%Y-%m-%d")
@@ -150,7 +153,7 @@ class Games(metaclass=SingletonMeta):
             season_games_df = self.calendar[self.current_season]
             today_games_df = season_games_df[season_games_df['GAME_DATE'] == filter_day]
 
-            if len(today_games_df.index) > 0 and not forceRefresh:
+            if len(today_games_df.index) > 0 and not force_refresh:
                 return today_games_df
 
         print("[Games] List game for this day: " + filter_day)
@@ -171,17 +174,35 @@ class Games(metaclass=SingletonMeta):
             calendar = self.calendar[self.current_season]
             calendar.drop(calendar[calendar['GAME_DATE'] == filter_day].index, inplace=True)
             self.calendar[self.current_season] = pd.concat([calendar, today_games_df])
+            self.back_to_back_detection(self.current_season)
             self.save_calendar(self.current_season)
 
         return today_games_df
 
-    def list_season_games(self, season=None, force=False):
+    def back_to_back_detection(self, season):
+        calendar_df = self.calendar[season]
+        for index, calendar in calendar_df.iterrows():
+            game_date = calendar['GAME_DATE']
+            date_yesterday = (datetime.strptime(game_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            home_team_id = calendar['TEAM_HOME_ID']
+            away_team_id = calendar['TEAM_AWAY_ID']
+            home_team_yesterday_game = calendar_df[(calendar_df['GAME_DATE'] == date_yesterday) &
+                                                   ((calendar_df['TEAM_HOME_ID'] == home_team_id) |
+                                                    (calendar_df['TEAM_AWAY_ID'] == home_team_id))]
+            home_away_yesterday_game = calendar_df[(calendar_df['GAME_DATE'] == date_yesterday) &
+                                                   ((calendar_df['TEAM_HOME_ID'] == away_team_id) |
+                                                    (calendar_df['TEAM_AWAY_ID'] == away_team_id))]
+
+            calendar_df.at[index, 'HOME_BACK_TO_BACK'] = len(home_team_yesterday_game.index) > 0
+            calendar_df.at[index, 'AWAY_BACK_TO_BACK'] = len(home_away_yesterday_game.index) > 0
+
+    def list_season_games(self, season=None, force_refresh=False):
         if not season:
             season = self.current_season
 
         print("[Games] List game for season: " + season)
 
-        if season not in self.calendar or force:
+        if season not in self.calendar or force_refresh:
             list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season, league_id_nullable=LeagueIDNullable.nba)
             season_raw_game_df = list_games.get_data_frames()[0]
             season_games = self.enriched_game_list(season, season_raw_game_df)
@@ -189,6 +210,7 @@ class Games(metaclass=SingletonMeta):
             season_calendar_df = pd.DataFrame.from_dict(season_games.values())
 
             self.calendar[season] = season_calendar_df
+            self.back_to_back_detection(season)
             self.save_calendar(season)
 
         return self.calendar[season]
@@ -240,11 +262,11 @@ class Games(metaclass=SingletonMeta):
         box_score_df["TTFL_SCORE"] = box_score_df["TTFL_SCORE"].fillna(0)
         return box_score_df
 
-    def fetch_season_box_scores(self, season):
+    def fetch_season_box_scores(self, season, force_refresh=False):
         if not season:
             season = self.current_season
 
-        list_games_df = self.list_season_games(season)
+        list_games_df = self.list_season_games(season, force_refresh)
 
         all_box_scores = []
         has_error = False
@@ -256,7 +278,7 @@ class Games(metaclass=SingletonMeta):
 
             print("[Games] Loading in progress: " + str(i + 1) + " / " + str(len(list_games_df.index)))
             game_id = game_df['GAME_ID']
-            if game_id in self.box_scores:
+            if not force_refresh and game_id in self.box_scores:
                 all_box_scores.append(self.box_scores[game_id])
             else:
                 try:

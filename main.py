@@ -10,10 +10,10 @@ from src.impact import Impact
 import pandas as pd
 
 
-def refresh_databases(season, games, teams, players):
+def refresh_databases(season, games, teams, players, force_refresh=False):
     # Fetch all box scores
     print("Fetching season " + season + " games...")
-    [all_box_scores_df, box_score_succeed] = games.fetch_season_box_scores(season)
+    [all_box_scores_df, box_score_succeed] = games.fetch_season_box_scores(season, force_refresh=force_refresh)
 
     # Fetch all teams
     print("Fetching teams...")
@@ -54,10 +54,10 @@ def ttlf_lab_impact_start():
     impact = Impact()
 
     # 1. Refresh databases
-    refresh_databases(season, games, teams, players)
+    refresh_databases(season, games, teams, players, force_refresh=False)
 
     # 2. Fetch day games
-    today_games_df = games.list_daily_games(day, forceRefresh=True)
+    today_games_df = games.list_daily_games(day, force_refresh=True)
     today_team_ids = today_games_df['TEAM_HOME_ID'].tolist() + today_games_df['TEAM_AWAY_ID'].tolist()
     today_players_df = players.fetch_player_by_teams(today_team_ids)
     today_player_ids = today_players_df['PERSON_ID'].to_list()
