@@ -8,18 +8,34 @@ from src.singleton_meta import SingletonMeta
 from datetime import datetime, timedelta
 import pandas as pd
 import sys
+import os
+import shutil
+
 
 class Impact(metaclass=SingletonMeta):
-    def __init__(self, impact_filename='databases/impact_{day}.xlsx'):
+    def __init__(self, template_filename='./impact_template.xlsx', impact_filename='databases/impact_{day}.xlsx'):
         self.predictions = {}
+        self.template_filename = template_filename
         self.impact_filename = impact_filename
 
     def save_impact(self, day, impact_table):
         date_object = datetime.strptime(day, "%m/%d/%Y")
-        filename = self.impact_filename.replace('{day}', date_object.strftime("%Y_%m_%d"))
-        print("Writing impact table file to: " + filename)
-        impact_df = pd.DataFrame.from_records(impact_table).sort_values(['SEASON_AVG'], ascending=False)
-        impact_df.to_excel(filename, index=False)
+        filename = os.path.realpath(self.impact_filename.replace('{day}', date_object.strftime("%Y-%m-%d")))
+
+        # Copy Template to destination
+        shutil.copy(self.template_filename, filename)
+
+        # load data
+        impact_df = pd.DataFrame.from_records(impact_table).sort_values(['TTFL_PREDICTION'], ascending=False)
+
+        # Update template copy
+        with pd.ExcelWriter(filename,
+                            engine='openpyxl',
+                            mode="a",
+                            if_sheet_exists="replace",
+                            ) as writer:
+            print("Writing impact table file to: " + filename)
+            impact_df.to_excel(writer, index=False, sheet_name="impact_data")
 
     def compute_team_position_impact(self, game_df, box_score_df):
         home_teams = game_df['TEAM_HOME_ID'].unique().tolist()
@@ -28,7 +44,8 @@ class Impact(metaclass=SingletonMeta):
 
         team_impact_table = {}
         for team_id in teams:
-            opponent_box_scores = box_score_df[(box_score_df['OPPONENT_TEAM_ID'] == team_id) & (box_score_df['MIN'] != 0)]
+            opponent_box_scores = box_score_df[
+                (box_score_df['OPPONENT_TEAM_ID'] == team_id) & (box_score_df['MIN'] != 0)]
             position_impact_table = opponent_box_scores.groupby(['PLAYER_POSITION'])['TTFL_SCORE'].mean()
             team_impact_table[team_id] = position_impact_table
 
@@ -54,14 +71,16 @@ class Impact(metaclass=SingletonMeta):
         if position == 'Guard':
             guard_score = team_score['Guard']
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
+                'Forward']
             return 0.6 * guard_score \
                 + 0.3 * guard_forward_score \
                 + 0.1 * forward_guard_score
         elif position == 'Guard-Forward':
             guard_score = team_score['Guard']
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
+                'Forward']
             forward_score = team_score['Forward']
             return 0.4 * guard_forward_score \
                 + 0.3 * guard_score \
@@ -70,7 +89,8 @@ class Impact(metaclass=SingletonMeta):
         elif position == 'Forward-Guard':
             guard_score = team_score['Guard']
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
+                'Forward']
             forward_score = team_score['Forward']
             return 0.4 * forward_guard_score \
                 + 0.3 * forward_score \
@@ -78,10 +98,13 @@ class Impact(metaclass=SingletonMeta):
                 + 0.1 * guard_score
         elif position == 'Forward':
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
+                'Forward']
             forward_score = team_score['Forward']
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
+                'Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
+                'Center']
             return 0.4 * forward_score \
                 + 0.2 * forward_guard_score \
                 + 0.2 * forward_center_score \
@@ -89,8 +112,10 @@ class Impact(metaclass=SingletonMeta):
                 + 0.1 * center_forward_score
         elif position == 'Forward-Center':
             forward_score = team_score['Forward']
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
+                'Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
+                'Center']
             center_score = team_score['Center']
             return 0.4 * forward_center_score \
                 + 0.3 * forward_score \
@@ -98,16 +123,20 @@ class Impact(metaclass=SingletonMeta):
                 + 0.1 * center_score
         elif position == 'Center-Forward':
             forward_score = team_score['Forward']
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
+                'Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
+                'Center']
             center_score = team_score['Center']
             return 0.4 * center_forward_score \
                 + 0.3 * center_score \
                 + 0.2 * forward_center_score \
                 + 0.1 * forward_score
         elif position == 'Center':
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
+                'Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
+                'Center']
             center_score = team_score['Center']
             return 0.6 * center_score \
                 + 0.3 * center_forward_score \
@@ -150,13 +179,17 @@ class Impact(metaclass=SingletonMeta):
                 print('[Impact] Error: team " + " do not play today', file=sys.stderr)
                 continue
 
-            team_box_score_df = box_score_df[box_score_df['TEAM_ID'] == team_id].sort_values(['GAME_DATE'], ascending=False)
+            team_box_score_df = box_score_df[box_score_df['TEAM_ID'] == team_id].sort_values(['GAME_DATE'],
+                                                                                             ascending=False)
             team_last_four_game_dates = team_box_score_df['GAME_DATE'].unique().tolist()
-            player_box_score = box_score_df[box_score_df['PLAYER_ID'] == player_id].sort_values(['GAME_DATE'], ascending=False)
+            player_box_score = box_score_df[box_score_df['PLAYER_ID'] == player_id].sort_values(['GAME_DATE'],
+                                                                                                ascending=False)
 
             # General information
             player_name = player['FIRST_NAME'] + " " + player['LAST_NAME']
-            last_game_date_tomorrow = (datetime.strptime(player_box_score['GAME_DATE'].values[0], "%Y-%m-%d") + timedelta(days=1)).strftime("%m/%d/%Y") \
+            last_game_date_tomorrow = (
+                    datetime.strptime(player_box_score['GAME_DATE'].values[0], "%Y-%m-%d") + timedelta(
+                days=1)).strftime("%m/%d/%Y") \
                 if len(player_box_score['TTFL_SCORE']) >= 1 else False
             is_back_to_back = last_game_date_tomorrow and last_game_date_tomorrow == day
 
@@ -173,8 +206,10 @@ class Impact(metaclass=SingletonMeta):
             # Trends - 30 days
             last_30_nb_played = len(last_thirty_days_box_score)
             last_30_below_twenty = len(last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'] < 20])
-            last_30_between_twenty_and_thirty = len(last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'].between(20, 29)])
-            last_30_between_thirty_and_fourty = len(last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'].between(30, 39)])
+            last_30_between_twenty_and_thirty = len(
+                last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'].between(20, 29)])
+            last_30_between_thirty_and_fourty = len(
+                last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'].between(30, 39)])
             last_30_above_fourty = len(last_thirty_days_box_score[last_thirty_days_box_score['TTFL_SCORE'] >= 40])
 
             # Trends - Last 4 games
@@ -186,7 +221,8 @@ class Impact(metaclass=SingletonMeta):
                 if len(team_last_four_game_dates) >= 3 else None
             last_4_game_box_score = player_box_score[player_box_score['GAME_DATE'] == team_last_four_game_dates[3]] \
                 if len(team_last_four_game_dates) >= 4 else None
-            last_game = last_game_box_score['TTFL_SCORE'].values[0] if last_game_box_score is not None and len(last_game_box_score['TTFL_SCORE']) >= 1 else None
+            last_game = last_game_box_score['TTFL_SCORE'].values[0] if last_game_box_score is not None and len(
+                last_game_box_score['TTFL_SCORE']) >= 1 else None
             last_2_game = last_2_game_box_score['TTFL_SCORE'].values[0] \
                 if last_2_game_box_score is not None and len(last_2_game_box_score['TTFL_SCORE']) >= 1 else None
             last_3_game = last_3_game_box_score['TTFL_SCORE'].values[0] \
@@ -196,9 +232,12 @@ class Impact(metaclass=SingletonMeta):
 
             # Match up
             match_up = this_game_df['MATCHUP']
-            opponent_box_score_df = box_score_df[box_score_df['TEAM_ID'] == opponent_team_id].sort_values(['GAME_DATE'], ascending=False)
+            opponent_box_score_df = box_score_df[box_score_df['TEAM_ID'] == opponent_team_id].sort_values(['GAME_DATE'],
+                                                                                                          ascending=False)
             opponent_last_game_date = opponent_box_score_df['GAME_DATE'].unique().tolist()
-            last_game_date_tomorrow = (datetime.strptime(opponent_last_game_date[0], "%Y-%m-%d") + timedelta(days=1)).strftime("%m/%d/%Y") if len(opponent_last_game_date) >= 1 else False
+            last_game_date_tomorrow = (
+                    datetime.strptime(opponent_last_game_date[0], "%Y-%m-%d") + timedelta(days=1)).strftime(
+                "%m/%d/%Y") if len(opponent_last_game_date) >= 1 else False
             opponent_back_to_back = last_game_date_tomorrow == day
 
             # Match Up History
@@ -219,7 +258,7 @@ class Impact(metaclass=SingletonMeta):
             opponent_position_impact = opponent_position_score - global_position_score
 
             # Impact Home Away
-            player_home_away = "Home" if this_game_is_home else "Away"
+            player_home_away = "H" if this_game_is_home else "A"
             home_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'HOME']
             away_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'AWAY']
             home_average = home_box_score['TTFL_SCORE'].mean()
@@ -234,6 +273,15 @@ class Impact(metaclass=SingletonMeta):
                 player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
                 player_b2b_impact = player_b2b_average - season_average
                 nb_b2b_played = len(player_b2b_box_score.index)
+
+            player_prediction_without_impact = 0.6 * season_average \
+                + 0.1 * last_thirty_days_average \
+                + 0.3 * last_ten_days_average
+            player_impact = opponent_position_impact \
+                + (home_away_impact if home_away_impact else 0) \
+                + (player_b2b_impact if player_b2b_impact else 0)
+
+            player_prediction_with_impact = player_prediction_without_impact + player_impact
 
             impact_table.append({
                 'PLAYER_ID': player_id,
@@ -259,11 +307,10 @@ class Impact(metaclass=SingletonMeta):
                 'PLAYER_POSITION': player_position_short + " vs. " + opponent_team_abbreviation,
                 'POSITION_IMPACT': opponent_position_impact,
                 'HOME_AWAY': player_home_away,
-                'HOME_AVG': home_average,
-                'AWAY_AVG': away_average,
                 'HOME_AWAY_IMPACT': home_away_impact,
                 'BACK_TO_BACK_IMPACT': player_b2b_impact,
                 'NB_BACK_TO_BACK_PLAYED': nb_b2b_played,
+                'TTFL_PREDICTION': player_prediction_with_impact,
             })
 
         self.save_impact(day, impact_table)

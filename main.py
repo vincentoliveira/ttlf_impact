@@ -90,7 +90,7 @@ def print_help():
 if __name__ == '__main__':
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hd:f:s:t:",
-                                   ["help", "day=", "force-refresh=", "season=", "season_type="])
+                                   ["help", "day=", "force-refresh=", "season=", "season-type="])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     arg_force_refresh = False
     arg_day = None
     arg_season = None
-    season_type = None
+    arg_season_type = None
 
     for opt, arg in opts:
         if opt in ("-d", "--day"):
@@ -107,6 +107,8 @@ if __name__ == '__main__':
             arg_force_refresh = bool(arg)
         elif opt in ("-s", "--season"):
             arg_season = arg
+        elif opt in ("-t", "--season-type"):
+            arg_season_type = arg
         else:
             print_help()
             sys.exit()
