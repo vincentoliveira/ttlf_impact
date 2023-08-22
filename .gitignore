@@ -2,3 +2,4 @@ databases/
 databases*/
 venv/
 .idea/
+~*

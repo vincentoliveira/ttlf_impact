@@ -61,7 +61,8 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
     impact = Impact()
 
     # 1. Refresh databases
-    refresh_databases(season, games, teams, players, force_refresh=force_refresh)
+    if force_refresh:
+        refresh_databases(season, games, teams, players, force_refresh=force_refresh)
 
     # 2. Fetch day games
     today_games_df = games.list_daily_games(day, force_refresh=force_refresh)

@@ -18,7 +18,7 @@ class Impact(metaclass=SingletonMeta):
         self.template_filename = template_filename
         self.impact_filename = impact_filename
 
-    def save_impact(self, day, impact_table):
+    def save_impact(self, day, impact_table, metadata):
         date_object = datetime.strptime(day, "%m/%d/%Y")
         filename = os.path.realpath(self.impact_filename.replace('{day}', date_object.strftime("%Y-%m-%d")))
 
@@ -27,6 +27,7 @@ class Impact(metaclass=SingletonMeta):
 
         # load data
         impact_df = pd.DataFrame.from_records(impact_table).sort_values(['TTFL_PREDICTION'], ascending=False)
+        metadata_df = pd.DataFrame.from_records([metadata])
 
         # Update template copy
         with pd.ExcelWriter(filename,
@@ -36,6 +37,30 @@ class Impact(metaclass=SingletonMeta):
                             ) as writer:
             print("Writing impact table file to: " + filename)
             impact_df.to_excel(writer, index=False, sheet_name="impact_data")
+            metadata_df.to_excel(writer, index=False, sheet_name="metadata")
+
+    def date_to_french_string(self, date_obj):
+        # Define the French month names
+        months = [
+            "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+            "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+        ]
+
+        # Extract day, month, and year from the datetime object
+        day = date_obj.day
+        month = months[date_obj.month - 1]
+        year = date_obj.year
+
+        # Create the formatted French date string
+        french_date_string = f"{day} {month} {year}"
+
+        return french_date_string
+
+    def get_impact_metadata(self, date_obj, game_df):
+        return {
+            "date": self.date_to_french_string(date_obj),
+            "nb_games": len(game_df.index),
+        }
 
     def compute_team_position_impact(self, game_df, box_score_df):
         home_teams = game_df['TEAM_HOME_ID'].unique().tolist()
@@ -144,6 +169,9 @@ class Impact(metaclass=SingletonMeta):
 
     def compute_impact(self, day, season, game_df, player_df, box_score_df):
         date_object = datetime.strptime(day, "%m/%d/%Y")
+
+        metadata = self.get_impact_metadata(date_object, game_df)
+
         ten_days_ago = (date_object - timedelta(days=10)).strftime("%Y-%m-%d")
         thirty_days_ago = (date_object - timedelta(days=30)).strftime("%Y-%m-%d")
 
@@ -176,7 +204,7 @@ class Impact(metaclass=SingletonMeta):
                 opponent_team_abbreviation = this_game_df['TEAM_HOME_ABBREVIATION']
                 this_game_is_home = False
             else:
-                print('[Impact] Error: team " + " do not play today', file=sys.stderr)
+                print('[Impact] Error: team ' + player['TEAM_ID'] + ' do not play today', file=sys.stderr)
                 continue
 
             team_box_score_df = box_score_df[box_score_df['TEAM_ID'] == team_id].sort_values(['GAME_DATE'],
@@ -184,7 +212,6 @@ class Impact(metaclass=SingletonMeta):
             team_last_four_game_dates = team_box_score_df['GAME_DATE'].unique().tolist()
             player_box_score = box_score_df[box_score_df['PLAYER_ID'] == player_id].sort_values(['GAME_DATE'],
                                                                                                 ascending=False)
-
             # General information
             player_name = player['FIRST_NAME'] + " " + player['LAST_NAME']
             last_game_date_tomorrow = (
@@ -313,6 +340,6 @@ class Impact(metaclass=SingletonMeta):
                 'TTFL_PREDICTION': player_prediction_with_impact,
             })
 
-        self.save_impact(day, impact_table)
+        self.save_impact(day, impact_table, metadata)
 
         return impact_table
