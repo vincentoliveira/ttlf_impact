@@ -60,6 +60,8 @@ class Impact(metaclass=SingletonMeta):
         return {
             "date": self.date_to_french_string(date_obj),
             "nb_games": len(game_df.index),
+            "deck": "Deck #1",
+            "pick": "Pick #1",
         }
 
     def compute_team_position_impact(self, game_df, box_score_df):
