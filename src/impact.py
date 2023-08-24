@@ -193,16 +193,19 @@ class Impact(metaclass=SingletonMeta):
 
             this_game_df = None
             this_game_is_home = True
+            player_team_abbreviation = None
             opponent_team_id = None
             opponent_team_abbreviation = None
             if player['TEAM_ID'] in home_teams:
                 this_game_df = game_df[game_df['TEAM_HOME_ID'] == player['TEAM_ID']].iloc[0]
                 opponent_team_id = this_game_df['TEAM_AWAY_ID']
+                player_team_abbreviation = this_game_df['TEAM_HOME_ABBREVIATION']
                 opponent_team_abbreviation = this_game_df['TEAM_AWAY_ABBREVIATION']
                 this_game_is_home = True
             elif player['TEAM_ID'] in away_teams:
                 this_game_df = game_df[game_df['TEAM_AWAY_ID'] == player['TEAM_ID']].iloc[0]
                 opponent_team_id = this_game_df['TEAM_HOME_ID']
+                player_team_abbreviation = this_game_df['TEAM_AWAY_ABBREVIATION']
                 opponent_team_abbreviation = this_game_df['TEAM_HOME_ABBREVIATION']
                 this_game_is_home = False
             else:
@@ -315,6 +318,7 @@ class Impact(metaclass=SingletonMeta):
             impact_table.append({
                 'PLAYER_ID': player_id,
                 'PLAYER_NAME': player_name,
+                'PLAYER_TEAM': player_team_abbreviation,
                 'BACK_TO_BACK': is_back_to_back,
                 'SEASON_AVG': season_average,
                 '30_DAYS_AVG': last_thirty_days_average,
@@ -328,7 +332,7 @@ class Impact(metaclass=SingletonMeta):
                 'LAST_3_GAME': last_3_game,
                 'LAST_2_GAME': last_2_game,
                 'LAST_GAME': last_game,
-                'MATCHUP': match_up,
+                'OPPONENT': opponent_team_abbreviation,
                 'OPPONENT_B2B': opponent_back_to_back,
                 'LAST_3_MATCHUP': last_3_match_up,
                 'LAST_2_MATCHUP': last_2_match_up,
