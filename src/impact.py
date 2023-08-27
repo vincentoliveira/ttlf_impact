@@ -306,9 +306,9 @@ class Impact(metaclass=SingletonMeta):
                 player_b2b_impact = player_b2b_average - season_average
                 nb_b2b_played = len(player_b2b_box_score.index)
 
-            player_prediction_without_impact = 0.6 * season_average \
-                + 0.1 * last_thirty_days_average \
-                + 0.3 * last_ten_days_average
+            player_prediction_without_impact = 0.5 * season_average \
+                + 0.15 * last_thirty_days_average \
+                + 0.35 * last_ten_days_average
             player_impact = opponent_position_impact \
                 + (home_away_impact if home_away_impact else 0) \
                 + (player_b2b_impact if player_b2b_impact else 0)
