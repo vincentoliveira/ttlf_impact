@@ -51,7 +51,7 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
     if not day:
         day = date.today().strftime("%m/%d/%Y")
     if not season:
-        season = "2022-23"
+        season = "2023-24"
     if not season_type:
         season_type = 'RegularSeason'
 
@@ -80,10 +80,10 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
 
 
 def print_help():
-    print('app.py -d <day_to_generate> -f <force_refresh> -s <season> -t <season_type>')
+    print('main.py -d <day_to_generate> -f <force_refresh> -s <season> -t <season_type>')
     print('\t<day_to_generate> mm/dd/yyyy (default: today)')
     print('\t<force_refresh> True or False (default: False)')
-    print('\t<season> yyyy-yy (default: 2022-23)')
+    print('\t<season> yyyy-yy (default: 2023-24)')
     print('\t<season_type> RegularSeason, PlayOff (default: RegularSeason)')
 
 
