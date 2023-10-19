@@ -95,6 +95,9 @@ class Impact(metaclass=SingletonMeta):
             return 'C'
 
     def get_team_position_score(self, position, team_score):
+        if team_score.empty:
+            return 0
+
         if position == 'Guard':
             guard_score = team_score['Guard']
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
@@ -125,13 +128,10 @@ class Impact(metaclass=SingletonMeta):
                 + 0.1 * guard_score
         elif position == 'Forward':
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
-                'Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
             forward_score = team_score['Forward']
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
-                'Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
-                'Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
             return 0.4 * forward_score \
                 + 0.2 * forward_guard_score \
                 + 0.2 * forward_center_score \
@@ -179,8 +179,6 @@ class Impact(metaclass=SingletonMeta):
 
         home_teams = game_df['TEAM_HOME_ID'].unique().tolist()
         away_teams = game_df['TEAM_AWAY_ID'].unique().tolist()
-
-        print("[Impact] Calculate impact: " + day)
 
         team_position_impact_table = self.compute_team_position_impact(game_df, box_score_df)
         played_game_box_score_df = box_score_df[box_score_df['MIN'] != 0]
@@ -286,7 +284,8 @@ class Impact(metaclass=SingletonMeta):
             player_position_short = self.get_position_short(player_position)
             opponent_position_score_table = team_position_impact_table[opponent_team_id]
             opponent_position_score = self.get_team_position_score(player_position, opponent_position_score_table)
-            global_position_score = global_position_impact_table[player_position]
+            global_position_score = global_position_impact_table[player_position] if not global_position_impact_table.empty else 0
+
             opponent_position_impact = opponent_position_score - global_position_score
 
             # Impact Home Away

@@ -91,13 +91,14 @@ class Players(metaclass=SingletonMeta):
             print("[Players] Loading in progress: " + str(i + 1) + " / " + str(len(team_id_list)))
             roster_df = self.get_roster_by_team_id(team_id)
             for player_id in roster_df['PLAYER_ID'].to_list():
-                player = self.players[player_id]
-                initial_team_id = player['TEAM_ID'].values[0]
+                player = self.players.get(player_id, None)
                 if player is None:
-                    print("[Players] Player " + player_id + " not found.")
+                    print("[Players] Player " + str(player_id) + " not found.")
                     player = self.get_player_info(player_id)
                     has_change = True
-                elif initial_team_id != team_id:
+
+                initial_team_id = player['TEAM_ID'].values[0]
+                if initial_team_id != team_id:
                     print("[Players] Player " + str(player_id) + " found in the wrong team (" + str(initial_team_id) + " instead of " + str(team_id) + ")")
                     player['TEAM_ID'] = team_id
                     has_change = True

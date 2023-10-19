@@ -9,6 +9,7 @@ from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
 from src.players import Players
 import re
+import requests
 import pandas as pd
 import sys
 from datetime import date, datetime, timedelta
@@ -71,73 +72,25 @@ class Games(metaclass=SingletonMeta):
         all_box_scores_df = all_box_scores_df.sort_values(['GAME_DATE'], ascending=False)
         all_box_scores_df.to_excel(filename, index=False)
 
-    def enriched_game_list(self, season, raw_game_list_df):
-        raw_game_list_df = raw_game_list_df.drop(
-            columns=['MIN', 'PTS', 'FGM', 'FGA', 'FG_PCT', 'FG3M', 'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'FT_PCT', 'OREB',
-                     'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'PLUS_MINUS'])
-
+    def enriched_game_list(self, season, day, game_list):
         enriched_game_list = {}
-        for i, game in raw_game_list_df.iterrows():
-            if game['GAME_ID'] in enriched_game_list:
-                if enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] is None:
-                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] = game['TEAM_ID']
-                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_NAME'] = game['TEAM_NAME']
-                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ABBREVIATION'] = game['TEAM_ABBREVIATION']
-                elif enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] is None:
-                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] = game['TEAM_ID']
-                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_NAME'] = game['TEAM_NAME']
-                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ABBREVIATION'] = game['TEAM_ABBREVIATION']
-            else:
-                season_type = None
-                if game['SEASON_ID'].startswith('1'):
-                    season_type = 'PreSeason'
-                elif game['SEASON_ID'].startswith('2'):
-                    season_type = 'RegularSeason'
-                elif game['SEASON_ID'].startswith('3'):
-                    season_type = 'AllStar'
-                elif game['SEASON_ID'].startswith('4'):
-                    season_type = 'PlayOff'
-                elif game['SEASON_ID'].startswith('5'):
-                    season_type = 'PlayIn'
 
-                matchup_pattern = r'\b([A-Z]+) vs. ([A-Z]+)\b'
-                matchup_alt_pattern = r'\b([A-Z]+) @ ([A-Z]+)\b'
+        for game in game_list:
+            enriched_game_list[game['gameId']] = {
+                'GAME_ID': game['gameId'],
+                'GAME_DATE': day,
+                'SEASON_YEAR': season,
+                'MATCHUP': game['homeTeam']['teamTricode'] + ' vs. ' + game['awayTeam']['teamTricode'],
+                'TEAM_HOME_ID': game['homeTeam']['teamId'],
+                'TEAM_HOME_NAME': game['homeTeam']['teamName'],
+                'TEAM_HOME_ABBREVIATION': game['homeTeam']['teamTricode'],
+                'TEAM_AWAY_ID': game['awayTeam']['teamId'],
+                'TEAM_AWAY_NAME': game['awayTeam']['teamName'],
+                'TEAM_AWAY_ABBREVIATION': game['awayTeam']['teamTricode'],
+                'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+            }
 
-                team_home_id = None
-                team_away_id = None
-                team_home_name = None
-                team_away_name = None
-                team_home_abbreviation = None
-                team_away_abbreviation = None
-                matchup = None
-                if re.fullmatch(matchup_pattern, game['MATCHUP']):
-                    matchup = game['MATCHUP']
-                    team_home_id = game['TEAM_ID']
-                    team_home_name = game['TEAM_NAME']
-                    team_home_abbreviation = game['TEAM_ABBREVIATION']
-                elif re.fullmatch(matchup_alt_pattern, game['MATCHUP']):
-                    matchup_replacement = r'\2 vs. \1'
-                    matchup = re.sub(matchup_alt_pattern, matchup_replacement, game['MATCHUP'])
-                    team_away_id = game['TEAM_ID']
-                    team_away_name = game['TEAM_NAME']
-                    team_away_abbreviation = game['TEAM_ABBREVIATION']
-
-                enriched_game_list[game['GAME_ID']] = {
-                    'GAME_ID': game['GAME_ID'],
-                    'GAME_DATE': game['GAME_DATE'],
-                    'SEASON_ID': game['SEASON_ID'],
-                    'SEASON_TYPE': season_type,
-                    'SEASON_YEAR': season,
-                    'MATCHUP': matchup,
-                    'TEAM_HOME_ID': team_home_id,
-                    'TEAM_HOME_NAME': team_home_name,
-                    'TEAM_HOME_ABBREVIATION': team_home_abbreviation,
-                    'TEAM_AWAY_ID': team_away_id,
-                    'TEAM_AWAY_NAME': team_away_name,
-                    'TEAM_AWAY_ABBREVIATION': team_away_abbreviation,
-                    'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
-                    'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
-                }
         return enriched_game_list
 
     def list_daily_games(self, day=None, league=LeagueIDNullable.nba, force_refresh=False):
@@ -162,10 +115,15 @@ class Games(metaclass=SingletonMeta):
             date_to_nullable=day,
             league_id_nullable=league
         )
-        list_games_df = list_games.get_data_frames()[0]
-        today_games = self.enriched_game_list(self.current_season, list_games_df)
 
+        schedule_league_v2 = requests.get("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json")
+        game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2.json()['leagueSchedule']['gameDates']))
+        if len(game_list) == 0:
+            return []
+
+        today_games = self.enriched_game_list(self.current_season, filter_day, game_list[0]['games'])
         today_games_df = pd.DataFrame.from_dict(today_games.values())
+
         if len(today_games_df.index) > 0:
             today_games_df = today_games_df.sort_values(['GAME_DATE'], ascending=False)
 
