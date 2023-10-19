@@ -114,4 +114,4 @@ if __name__ == '__main__':
             print_help()
             sys.exit()
 
-    ttlf_lab_impact_start(day=arg_day, force_refresh=arg_force_refresh)
+    ttlf_lab_impact_start(day=arg_day, season=arg_season, season_type=arg_season_type, force_refresh=arg_force_refresh)
