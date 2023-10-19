@@ -269,5 +269,6 @@ class Games(metaclass=SingletonMeta):
         return all_box_scores_df[
             (all_box_scores_df['PLAYER_ID'].isin(player_id_list))
             & (all_box_scores_df['GAME_DATE'] < before_day)
+            # To remove for early season
             & (all_box_scores_df['SEASON_TYPE'] == season_type)
         ]

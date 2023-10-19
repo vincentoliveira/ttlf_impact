@@ -74,6 +74,22 @@ class Impact(metaclass=SingletonMeta):
             opponent_box_scores = box_score_df[
                 (box_score_df['OPPONENT_TEAM_ID'] == team_id) & (box_score_df['MIN'] != 0)]
             position_impact_table = opponent_box_scores.groupby(['PLAYER_POSITION'])['TTFL_SCORE'].mean()
+
+            if 'Guard' not in position_impact_table:
+                position_impact_table['Guard'] = 0
+            if 'Guard-Forward' not in position_impact_table:
+                position_impact_table['Guard-Forward'] = 0
+            if 'Forward-Guard' not in position_impact_table:
+                position_impact_table['Forward-Guard'] = 0
+            if 'Forward' not in position_impact_table:
+                position_impact_table['Forward'] = 0
+            if 'Forward-Center' not in position_impact_table:
+                position_impact_table['Forward-Center'] = 0
+            if 'Center-Forward' not in position_impact_table:
+                position_impact_table['Center-Forward'] = 0
+            if 'Center' not in position_impact_table:
+                position_impact_table['Center'] = 0
+
             team_impact_table[team_id] = position_impact_table
 
         return team_impact_table
@@ -225,6 +241,7 @@ class Impact(metaclass=SingletonMeta):
 
             # Average
             season_box_score = player_box_score[(player_box_score['SEASON'] == season)
+                                                # To remove for early season
                                                 & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
                                                 & (player_box_score['MIN'] != 0)]
             last_ten_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= ten_days_ago]
