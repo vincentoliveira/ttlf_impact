@@ -33,6 +33,7 @@ class Games(metaclass=SingletonMeta):
 
     def load_all_databases(self, season):
         self.load_calendar(season)
+        self.load_box_scores("2022-23")
         self.load_box_scores(season)
 
     def load_calendar(self, season):
@@ -71,6 +72,27 @@ class Games(metaclass=SingletonMeta):
         all_box_scores_df = all_box_scores_df[all_box_scores_df['SEASON'] == season]
         all_box_scores_df = all_box_scores_df.sort_values(['GAME_DATE'], ascending=False)
         all_box_scores_df.to_excel(filename, index=False)
+
+        def enriched_game_list(self, season, day, game_list):
+            enriched_game_list = {}
+
+            for game in game_list:
+                enriched_game_list[game['gameId']] = {
+                    'GAME_ID': game['gameId'],
+                    'GAME_DATE': day,
+                    'SEASON_YEAR': season,
+                    'MATCHUP': game['homeTeam']['teamTricode'] + ' vs. ' + game['awayTeam']['teamTricode'],
+                    'TEAM_HOME_ID': game['homeTeam']['teamId'],
+                    'TEAM_HOME_NAME': game['homeTeam']['teamName'],
+                    'TEAM_HOME_ABBREVIATION': game['homeTeam']['teamTricode'],
+                    'TEAM_AWAY_ID': game['awayTeam']['teamId'],
+                    'TEAM_AWAY_NAME': game['awayTeam']['teamName'],
+                    'TEAM_AWAY_ABBREVIATION': game['awayTeam']['teamTricode'],
+                    'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                    'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                }
+
+            return enriched_game_list
 
     def enriched_game_list(self, season, day, game_list):
         enriched_game_list = {}
@@ -153,6 +175,75 @@ class Games(metaclass=SingletonMeta):
             calendar_df.at[index, 'HOME_BACK_TO_BACK'] = len(home_team_yesterday_game.index) > 0
             calendar_df.at[index, 'AWAY_BACK_TO_BACK'] = len(home_away_yesterday_game.index) > 0
 
+    def enriched_season_game_list(self, season, raw_game_list_df):
+        raw_game_list_df = raw_game_list_df.drop(
+            columns=['MIN', 'PTS', 'FGM', 'FGA', 'FG_PCT', 'FG3M', 'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'FT_PCT', 'OREB',
+                     'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 'PLUS_MINUS'])
+
+        enriched_game_list = {}
+        for i, game in raw_game_list_df.iterrows():
+            if game['GAME_ID'] in enriched_game_list:
+                if enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] is None:
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ID'] = game['TEAM_ID']
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_NAME'] = game['TEAM_NAME']
+                    enriched_game_list[game['GAME_ID']]['TEAM_HOME_ABBREVIATION'] = game['TEAM_ABBREVIATION']
+                elif enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] is None:
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ID'] = game['TEAM_ID']
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_NAME'] = game['TEAM_NAME']
+                    enriched_game_list[game['GAME_ID']]['TEAM_AWAY_ABBREVIATION'] = game['TEAM_ABBREVIATION']
+            else:
+                season_type = None
+                if game['SEASON_ID'].startswith('1'):
+                    season_type = 'PreSeason'
+                elif game['SEASON_ID'].startswith('2'):
+                    season_type = 'RegularSeason'
+                elif game['SEASON_ID'].startswith('3'):
+                    season_type = 'AllStar'
+                elif game['SEASON_ID'].startswith('4'):
+                    season_type = 'PlayOff'
+                elif game['SEASON_ID'].startswith('5'):
+                    season_type = 'PlayIn'
+
+                matchup_pattern = r'\b([A-Z]+) vs. ([A-Z]+)\b'
+                matchup_alt_pattern = r'\b([A-Z]+) @ ([A-Z]+)\b'
+
+                team_home_id = None
+                team_away_id = None
+                team_home_name = None
+                team_away_name = None
+                team_home_abbreviation = None
+                team_away_abbreviation = None
+                matchup = None
+                if re.fullmatch(matchup_pattern, game['MATCHUP']):
+                    matchup = game['MATCHUP']
+                    team_home_id = game['TEAM_ID']
+                    team_home_name = game['TEAM_NAME']
+                    team_home_abbreviation = game['TEAM_ABBREVIATION']
+                elif re.fullmatch(matchup_alt_pattern, game['MATCHUP']):
+                    matchup_replacement = r'\2 vs. \1'
+                    matchup = re.sub(matchup_alt_pattern, matchup_replacement, game['MATCHUP'])
+                    team_away_id = game['TEAM_ID']
+                    team_away_name = game['TEAM_NAME']
+                    team_away_abbreviation = game['TEAM_ABBREVIATION']
+
+                enriched_game_list[game['GAME_ID']] = {
+                    'GAME_ID': game['GAME_ID'],
+                    'GAME_DATE': game['GAME_DATE'],
+                    'SEASON_ID': game['SEASON_ID'],
+                    'SEASON_TYPE': season_type,
+                    'SEASON_YEAR': season,
+                    'MATCHUP': matchup,
+                    'TEAM_HOME_ID': team_home_id,
+                    'TEAM_HOME_NAME': team_home_name,
+                    'TEAM_HOME_ABBREVIATION': team_home_abbreviation,
+                    'TEAM_AWAY_ID': team_away_id,
+                    'TEAM_AWAY_NAME': team_away_name,
+                    'TEAM_AWAY_ABBREVIATION': team_away_abbreviation,
+                    'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                    'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+                }
+        return enriched_game_list
+
     def list_season_games(self, season=None, force_refresh=False):
         if not season:
             season = self.current_season
@@ -162,7 +253,7 @@ class Games(metaclass=SingletonMeta):
         if season not in self.calendar or force_refresh:
             list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season, league_id_nullable=LeagueIDNullable.nba)
             season_raw_game_df = list_games.get_data_frames()[0]
-            season_games = self.enriched_game_list(season, season_raw_game_df)
+            season_games = self.enriched_season_game_list(season, season_raw_game_df)
 
             season_calendar_df = pd.DataFrame.from_dict(season_games.values())
 
@@ -270,5 +361,5 @@ class Games(metaclass=SingletonMeta):
             (all_box_scores_df['PLAYER_ID'].isin(player_id_list))
             & (all_box_scores_df['GAME_DATE'] < before_day)
             # To remove for early season
-            & (all_box_scores_df['SEASON_TYPE'] == season_type)
+            #& (all_box_scores_df['SEASON_TYPE'] == season_type)
         ]

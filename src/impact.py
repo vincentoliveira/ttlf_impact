@@ -10,6 +10,7 @@ import pandas as pd
 import sys
 import os
 import shutil
+from numpy import *
 
 
 class Impact(metaclass=SingletonMeta):
@@ -144,10 +145,13 @@ class Impact(metaclass=SingletonMeta):
                 + 0.1 * guard_score
         elif position == 'Forward':
             guard_forward_score = team_score['Guard-Forward'] if 'Guard-Forward' in team_score else team_score['Guard']
-            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score['Forward']
+            forward_guard_score = team_score['Forward-Guard'] if 'Forward-Guard' in team_score else team_score[
+                'Forward']
             forward_score = team_score['Forward']
-            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score['Forward']
-            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score['Center']
+            forward_center_score = team_score['Forward-Center'] if 'Forward-Center' in team_score else team_score[
+                'Forward']
+            center_forward_score = team_score['Center-Forward'] if 'Center-Forward' in team_score else team_score[
+                'Center']
             return 0.4 * forward_score \
                 + 0.2 * forward_guard_score \
                 + 0.2 * forward_center_score \
@@ -241,12 +245,17 @@ class Impact(metaclass=SingletonMeta):
 
             # Average
             season_box_score = player_box_score[(player_box_score['SEASON'] == season)
-                                                # To remove for early season
                                                 & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
                                                 & (player_box_score['MIN'] != 0)]
-            last_ten_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= ten_days_ago]
-            last_thirty_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= thirty_days_ago]
+            last_season_box_score = player_box_score[(player_box_score['SEASON'] == "2022-23")
+                                                     & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
+                                                     & (player_box_score['MIN'] != 0)]
+            matched_box_score = player_box_score[(player_box_score['SEASON'] == season)
+                                                 & (player_box_score['MIN'] != 0)]
+            last_ten_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= ten_days_ago]
+            last_thirty_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= thirty_days_ago]
             season_average = season_box_score['TTFL_SCORE'].mean()
+            last_season_average = last_season_box_score['TTFL_SCORE'].mean()
             last_ten_days_average = last_ten_days_box_score['TTFL_SCORE'].mean()
             last_thirty_days_average = last_thirty_days_box_score['TTFL_SCORE'].mean()
 
@@ -268,14 +277,26 @@ class Impact(metaclass=SingletonMeta):
                 if len(team_last_four_game_dates) >= 3 else None
             last_4_game_box_score = player_box_score[player_box_score['GAME_DATE'] == team_last_four_game_dates[3]] \
                 if len(team_last_four_game_dates) >= 4 else None
-            last_game = last_game_box_score['TTFL_SCORE'].values[0] if last_game_box_score is not None and len(
-                last_game_box_score['TTFL_SCORE']) >= 1 else None
+            last_game = last_game_box_score['TTFL_SCORE'].values[0] \
+                if last_game_box_score is not None \
+                   and len(last_game_box_score['TTFL_SCORE']) >= 1 \
+                   and last_game_box_score['MIN'].values[0] != 0 \
+                else None
             last_2_game = last_2_game_box_score['TTFL_SCORE'].values[0] \
-                if last_2_game_box_score is not None and len(last_2_game_box_score['TTFL_SCORE']) >= 1 else None
+                if last_2_game_box_score is not None \
+                   and len(last_2_game_box_score['TTFL_SCORE']) >= 1 \
+                   and last_2_game_box_score['MIN'].values[0] != 0 \
+                else None
             last_3_game = last_3_game_box_score['TTFL_SCORE'].values[0] \
-                if last_3_game_box_score is not None and len(last_3_game_box_score['TTFL_SCORE']) >= 1 else None
+                if last_3_game_box_score is not None \
+                   and len(last_3_game_box_score['TTFL_SCORE']) >= 1 \
+                   and last_3_game_box_score['MIN'].values[0] != 0 \
+                else None
             last_4_game = last_4_game_box_score['TTFL_SCORE'].values[0] \
-                if last_4_game_box_score is not None and len(last_4_game_box_score['TTFL_SCORE']) >= 1 else None
+                if last_4_game_box_score is not None \
+                   and len(last_4_game_box_score['TTFL_SCORE']) >= 1 \
+                   and last_4_game_box_score['MIN'].values[0] != 0 \
+                else None
 
             # Match up
             match_up = this_game_df['MATCHUP']
@@ -298,10 +319,14 @@ class Impact(metaclass=SingletonMeta):
 
             # Impact Position
             player_position = player['POSITION']
+            if not isinstance(player_position, str):
+                continue
+
             player_position_short = self.get_position_short(player_position)
             opponent_position_score_table = team_position_impact_table[opponent_team_id]
             opponent_position_score = self.get_team_position_score(player_position, opponent_position_score_table)
-            global_position_score = global_position_impact_table[player_position] if not global_position_impact_table.empty else 0
+            global_position_score = global_position_impact_table[
+                player_position] if not global_position_impact_table.empty else 0
 
             opponent_position_impact = opponent_position_score - global_position_score
 
@@ -318,18 +343,26 @@ class Impact(metaclass=SingletonMeta):
             nb_b2b_played = None
             if is_back_to_back:
                 player_b2b_box_score = season_box_score[season_box_score['BACK_TO_BACK']]
-                player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
-                player_b2b_impact = player_b2b_average - season_average
                 nb_b2b_played = len(player_b2b_box_score.index)
 
-            player_prediction_without_impact = 0.5 * season_average \
-                + 0.15 * last_thirty_days_average \
-                + 0.35 * last_ten_days_average
-            player_impact = opponent_position_impact \
-                + (home_away_impact if home_away_impact else 0) \
-                + (player_b2b_impact if player_b2b_impact else 0)
+                if nb_b2b_played > 0:
+                    player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
+                    player_b2b_impact = player_b2b_average - season_average
+                else:
+                    player_b2b_impact = 0
 
-            player_prediction_with_impact = player_prediction_without_impact + player_impact
+            player_prediction_without_impact = 0.5 * season_average \
+                                               + 0.15 * last_thirty_days_average \
+                                               + 0.35 * last_ten_days_average
+            player_impact = opponent_position_impact \
+                            + (home_away_impact if home_away_impact else 0) \
+                            + (player_b2b_impact if player_b2b_impact else 0)
+
+            # player_prediction_with_impact = player_prediction_without_impact + player_impact
+            player_prediction_with_impact = 0.4 * (last_season_average if not isnan(last_season_average) else 0) \
+                                            + 0.2 * (
+                                                last_thirty_days_average if not isnan(last_thirty_days_average) else 0) \
+                                            + 0.4 * (last_ten_days_average if not isnan(last_ten_days_average) else 0)
 
             impact_table.append({
                 'PLAYER_ID': player_id,
@@ -360,6 +393,8 @@ class Impact(metaclass=SingletonMeta):
                 'BACK_TO_BACK_IMPACT': player_b2b_impact,
                 'NB_BACK_TO_BACK_PLAYED': nb_b2b_played,
                 'TTFL_PREDICTION': player_prediction_with_impact,
+                'TTFL_IMPACT': player_impact,
+                'LAST_SEASON_AVERAGE': last_season_average,
             })
 
         self.save_impact(day, impact_table, metadata)
