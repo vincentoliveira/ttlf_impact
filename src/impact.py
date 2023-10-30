@@ -1,8 +1,8 @@
 # TTFL Lab Impact
 #
-# Games
+# Impact
 #
-# Fetch Game Information
+# Compute Impact Table
 
 from src.singleton_meta import SingletonMeta
 from datetime import datetime, timedelta

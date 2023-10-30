@@ -65,7 +65,7 @@ class Teams(metaclass=SingletonMeta):
 
         return [pd.concat(all_team_info), not has_error]
 
-    def get_team_id_from_abbreviation(self, opponent_abbreviation):
+    def find_team_id_by_abbreviation(self, opponent_abbreviation):
         all_box_scores_df = pd.concat(self.teams.values())
         team = all_box_scores_df[all_box_scores_df['TEAM_ABBREVIATION'] == opponent_abbreviation]['TEAM_ID']
         return team.values[0] if len(team) >= 1 else None

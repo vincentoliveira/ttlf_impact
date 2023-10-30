@@ -8,6 +8,7 @@ from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
 from src.players import Players
+from src.teams import Teams
 import re
 import requests
 import pandas as pd
@@ -95,20 +96,24 @@ class Games(metaclass=SingletonMeta):
             return enriched_game_list
 
     def enriched_game_list(self, season, day, game_list):
-        enriched_game_list = {}
+        teams = Teams()
 
+        enriched_game_list = {}
         for game in game_list:
-            enriched_game_list[game['gameId']] = {
-                'GAME_ID': game['gameId'],
+            home_team_id = teams.find_team_id_by_abbreviation(game['htAbbreviation'])
+            away_team_id = teams.find_team_id_by_abbreviation(game['vtAbbreviation'])
+
+            enriched_game_list[game['gameID']] = {
+                'GAME_ID': game['gameID'],
                 'GAME_DATE': day,
                 'SEASON_YEAR': season,
-                'MATCHUP': game['homeTeam']['teamTricode'] + ' vs. ' + game['awayTeam']['teamTricode'],
-                'TEAM_HOME_ID': game['homeTeam']['teamId'],
-                'TEAM_HOME_NAME': game['homeTeam']['teamName'],
-                'TEAM_HOME_ABBREVIATION': game['homeTeam']['teamTricode'],
-                'TEAM_AWAY_ID': game['awayTeam']['teamId'],
-                'TEAM_AWAY_NAME': game['awayTeam']['teamName'],
-                'TEAM_AWAY_ABBREVIATION': game['awayTeam']['teamTricode'],
+                'MATCHUP': game['htAbbreviation'] + ' vs. ' + game['vtAbbreviation'],
+                'TEAM_HOME_ID': home_team_id,
+                'TEAM_HOME_NAME': game['htNickName'],
+                'TEAM_HOME_ABBREVIATION': game['htAbbreviation'],
+                'TEAM_AWAY_ID': away_team_id,
+                'TEAM_AWAY_NAME': game['vtNickName'],
+                'TEAM_AWAY_ABBREVIATION': game['vtAbbreviation'],
                 'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
                 'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
             }
@@ -138,12 +143,17 @@ class Games(metaclass=SingletonMeta):
             league_id_nullable=league
         )
 
-        schedule_league_v2 = requests.get("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json")
-        game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2.json()['leagueSchedule']['gameDates']))
+        schedule_url = "https://stats.nba.com/stats/internationalbroadcasterschedule?LeagueID=00&Season=2023&RegionID=1&Date=%s&EST=Y" % day
+        schedule_league_v2_response = requests.get(schedule_url)
+        schedule_league_v2 = schedule_league_v2_response.json()
+        game_list = schedule_league_v2['resultSets'][0]['NextGameList']
+
+        #schedule_url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
+        #game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2['leagueSchedule']['gameDates']))
         if len(game_list) == 0:
             return []
 
-        today_games = self.enriched_game_list(self.current_season, filter_day, game_list[0]['games'])
+        today_games = self.enriched_game_list(self.current_season, filter_day, game_list)
         today_games_df = pd.DataFrame.from_dict(today_games.values())
 
         if len(today_games_df.index) > 0:
