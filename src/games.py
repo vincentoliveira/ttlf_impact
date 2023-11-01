@@ -100,20 +100,35 @@ class Games(metaclass=SingletonMeta):
 
         enriched_game_list = {}
         for game in game_list:
-            home_team_id = teams.find_team_id_by_abbreviation(game['htAbbreviation'])
-            away_team_id = teams.find_team_id_by_abbreviation(game['vtAbbreviation'])
+            # home_team_id = teams.find_team_id_by_abbreviation(game['htAbbreviation'])
+            # away_team_id = teams.find_team_id_by_abbreviation(game['vtAbbreviation'])
+            #
+            # enriched_game_list[game['gameID']] = {
+            #     'GAME_ID': game['gameID'],
+            #     'GAME_DATE': day,
+            #     'SEASON_YEAR': season,
+            #     'MATCHUP': game['htAbbreviation'] + ' vs. ' + game['vtAbbreviation'],
+            #     'TEAM_HOME_ID': home_team_id,
+            #     'TEAM_HOME_NAME': game['htNickName'],
+            #     'TEAM_HOME_ABBREVIATION': game['htAbbreviation'],
+            #     'TEAM_AWAY_ID': away_team_id,
+            #     'TEAM_AWAY_NAME': game['vtNickName'],
+            #     'TEAM_AWAY_ABBREVIATION': game['vtAbbreviation'],
+            #     'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+            #     'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
+            # }
 
-            enriched_game_list[game['gameID']] = {
-                'GAME_ID': game['gameID'],
+            enriched_game_list[game['gameId']] = {
+                'GAME_ID': game['gameId'],
                 'GAME_DATE': day,
                 'SEASON_YEAR': season,
-                'MATCHUP': game['htAbbreviation'] + ' vs. ' + game['vtAbbreviation'],
-                'TEAM_HOME_ID': home_team_id,
-                'TEAM_HOME_NAME': game['htNickName'],
-                'TEAM_HOME_ABBREVIATION': game['htAbbreviation'],
-                'TEAM_AWAY_ID': away_team_id,
-                'TEAM_AWAY_NAME': game['vtNickName'],
-                'TEAM_AWAY_ABBREVIATION': game['vtAbbreviation'],
+                'MATCHUP': game['homeTeam']['teamTricode'] + ' vs. ' + game['awayTeam']['teamTricode'],
+                'TEAM_HOME_ID': game['homeTeam']['teamId'],
+                'TEAM_HOME_NAME': game['homeTeam']['teamName'],
+                'TEAM_HOME_ABBREVIATION': game['homeTeam']['teamTricode'],
+                'TEAM_AWAY_ID': game['awayTeam']['teamId'],
+                'TEAM_AWAY_NAME': game['awayTeam']['teamName'],
+                'TEAM_AWAY_ABBREVIATION': game['awayTeam']['teamTricode'],
                 'HOME_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
                 'AWAY_BACK_TO_BACK': False,  # need to be computed with self.back_to_back_detection()
             }
@@ -143,13 +158,14 @@ class Games(metaclass=SingletonMeta):
             league_id_nullable=league
         )
 
-        schedule_url = "https://stats.nba.com/stats/internationalbroadcasterschedule?LeagueID=00&Season=2023&RegionID=1&Date=%s&EST=Y" % day
+        schedule_url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
         schedule_league_v2_response = requests.get(schedule_url)
         schedule_league_v2 = schedule_league_v2_response.json()
-        game_list = schedule_league_v2['resultSets'][0]['NextGameList']
+        today_game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2['leagueSchedule']['gameDates']))
+        if today_game_list == 0:
+            return []
 
-        #schedule_url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
-        #game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2['leagueSchedule']['gameDates']))
+        game_list = today_game_list[0]['games']
         if len(game_list) == 0:
             return []
 

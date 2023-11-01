@@ -247,15 +247,14 @@ class Impact(metaclass=SingletonMeta):
             season_box_score = player_box_score[(player_box_score['SEASON'] == season)
                                                 & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
                                                 & (player_box_score['MIN'] != 0)]
-            last_season_box_score = player_box_score[(player_box_score['SEASON'] == "2022-23")
-                                                     & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
-                                                     & (player_box_score['MIN'] != 0)]
+
+            # TODO: remove after 15 days season
             matched_box_score = player_box_score[(player_box_score['SEASON'] == season)
                                                  & (player_box_score['MIN'] != 0)]
+
             last_ten_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= ten_days_ago]
             last_thirty_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= thirty_days_ago]
             season_average = season_box_score['TTFL_SCORE'].mean()
-            last_season_average = last_season_box_score['TTFL_SCORE'].mean()
             last_ten_days_average = last_ten_days_box_score['TTFL_SCORE'].mean()
             last_thirty_days_average = last_thirty_days_box_score['TTFL_SCORE'].mean()
 
@@ -329,6 +328,9 @@ class Impact(metaclass=SingletonMeta):
                 player_position] if not global_position_impact_table.empty else 0
 
             opponent_position_impact = opponent_position_score - global_position_score
+            opponent_position_impact_uplift = opponent_position_impact / global_position_score \
+                if global_position_score != 0 \
+                else 0
 
             # Impact Home Away
             player_home_away = "H" if this_game_is_home else "A"
@@ -337,6 +339,7 @@ class Impact(metaclass=SingletonMeta):
             home_average = home_box_score['TTFL_SCORE'].mean()
             away_average = away_box_score['TTFL_SCORE'].mean()
             home_away_impact = home_average - season_average if this_game_is_home else away_average - season_average
+            home_away_impact_uplift = home_away_impact / season_average if season_average != 0 else 0
 
             # Impact Back to Back
             player_b2b_impact = None
@@ -347,6 +350,10 @@ class Impact(metaclass=SingletonMeta):
 
                 if nb_b2b_played > 0:
                     player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
+                    if player_id == 1630596:
+                        print(player_b2b_box_score)
+                        print(player_b2b_average)
+                        print(season_average)
                     player_b2b_impact = player_b2b_average - season_average
                 else:
                     player_b2b_impact = 0
@@ -358,11 +365,7 @@ class Impact(metaclass=SingletonMeta):
                             + (home_away_impact if home_away_impact else 0) \
                             + (player_b2b_impact if player_b2b_impact else 0)
 
-            # player_prediction_with_impact = player_prediction_without_impact + player_impact
-            player_prediction_with_impact = 0.4 * (last_season_average if not isnan(last_season_average) else 0) \
-                                            + 0.2 * (
-                                                last_thirty_days_average if not isnan(last_thirty_days_average) else 0) \
-                                            + 0.4 * (last_ten_days_average if not isnan(last_ten_days_average) else 0)
+            player_prediction_with_impact = player_prediction_without_impact + player_impact
 
             impact_table.append({
                 'PLAYER_ID': player_id,
@@ -388,13 +391,14 @@ class Impact(metaclass=SingletonMeta):
                 'LAST_MATCHUP': last_match_up,
                 'PLAYER_POSITION': player_position_short + " vs. " + opponent_team_abbreviation,
                 'POSITION_IMPACT': opponent_position_impact,
+                'POSITION_IMPACT_UPLIFT': opponent_position_impact_uplift,
                 'HOME_AWAY': player_home_away,
                 'HOME_AWAY_IMPACT': home_away_impact,
+                'HOME_AWAY_IMPACT_UPLIFT': home_away_impact_uplift,
                 'BACK_TO_BACK_IMPACT': player_b2b_impact,
                 'NB_BACK_TO_BACK_PLAYED': nb_b2b_played,
                 'TTFL_PREDICTION': player_prediction_with_impact,
                 'TTFL_IMPACT': player_impact,
-                'LAST_SEASON_AVERAGE': last_season_average,
             })
 
         self.save_impact(day, impact_table, metadata)
