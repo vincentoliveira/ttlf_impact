@@ -7,6 +7,7 @@
 from src.singleton_meta import SingletonMeta
 from datetime import datetime, timedelta
 import pandas as pd
+import requests
 import sys
 import os
 import shutil
@@ -58,10 +59,13 @@ class Impact(metaclass=SingletonMeta):
         return french_date_string
 
     def get_impact_metadata(self, date_obj, game_df):
+        deck_number_url = "http://api-ttfl.yanisguerault.fr/getCurrentDeck"
+        deck_number_response = requests.get(deck_number_url)
+        deck_number = deck_number_response.text if deck_number_response else 0
         return {
             "date": self.date_to_french_string(date_obj),
             "nb_games": len(game_df.index),
-            "deck": "Deck #1",
+            "deck": "Deck #" + str(deck_number),
             "pick": "Pick #1",
         }
 
@@ -189,7 +193,7 @@ class Impact(metaclass=SingletonMeta):
                 + 0.3 * center_forward_score \
                 + 0.1 * forward_center_score
 
-    def compute_impact(self, day, season, game_df, player_df, box_score_df):
+    def compute_impact(self, day, season, game_df, player_df, box_score_df, save = True):
         date_object = datetime.strptime(day, "%m/%d/%Y")
 
         metadata = self.get_impact_metadata(date_object, game_df)
@@ -350,10 +354,6 @@ class Impact(metaclass=SingletonMeta):
 
                 if nb_b2b_played > 0:
                     player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
-                    if player_id == 1630596:
-                        print(player_b2b_box_score)
-                        print(player_b2b_average)
-                        print(season_average)
                     player_b2b_impact = player_b2b_average - season_average
                 else:
                     player_b2b_impact = 0
@@ -401,6 +401,7 @@ class Impact(metaclass=SingletonMeta):
                 'TTFL_IMPACT': player_impact,
             })
 
-        self.save_impact(day, impact_table, metadata)
+        if save:
+            self.save_impact(day, impact_table, metadata)
 
         return impact_table
