@@ -4,9 +4,10 @@
 import re
 
 from src.games import Games
-from src.teams import Teams
-from src.players import Players
 from src.impact import Impact
+from src.injuries import Injuries
+from src.players import Players
+from src.teams import Teams
 from datetime import date
 import sys
 import getopt
@@ -75,8 +76,12 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
     today_player_ids = today_players_df['PERSON_ID'].to_list()
     today_player_box_scores = games.get_box_scores_for_players(today_player_ids, day, season_type)
 
+    # 3. Fetch Injury Report
+    injuries = Injuries()
+    injury_report = injuries.load_injury_report()
+
     # 3. Compute prediction
-    impact.compute_impact(day, season, today_games_df, today_players_df, today_player_box_scores)
+    impact.compute_impact(day, season, today_games_df, today_players_df, today_player_box_scores, injury_report, save=True)
 
 
 def print_help():

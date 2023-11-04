@@ -5,9 +5,9 @@
 # Compute Impact Table
 
 from src.singleton_meta import SingletonMeta
+from src.injuries import Injuries
 from datetime import datetime, timedelta
 import pandas as pd
-import requests
 import sys
 import os
 import shutil
@@ -31,6 +31,9 @@ class Impact(metaclass=SingletonMeta):
         impact_df = pd.DataFrame.from_records(impact_table).sort_values(['TTFL_PREDICTION'], ascending=False)
         metadata_df = pd.DataFrame.from_records([metadata])
 
+        in_players_df = impact_df[impact_df['IR_STATUS'] != 'Out']
+        out_players_df = impact_df[impact_df['IR_STATUS'] == 'Out']
+
         # Update template copy
         with pd.ExcelWriter(filename,
                             engine='openpyxl',
@@ -38,7 +41,8 @@ class Impact(metaclass=SingletonMeta):
                             if_sheet_exists="replace",
                             ) as writer:
             print("Writing impact table file to: " + filename)
-            impact_df.to_excel(writer, index=False, sheet_name="impact_data")
+            in_players_df.to_excel(writer, index=False, sheet_name="impact_data")
+            out_players_df.to_excel(writer, index=False, sheet_name="out_players")
             metadata_df.to_excel(writer, index=False, sheet_name="metadata")
 
     def date_to_french_string(self, date_obj):
@@ -191,7 +195,9 @@ class Impact(metaclass=SingletonMeta):
                 + 0.3 * center_forward_score \
                 + 0.1 * forward_center_score
 
-    def compute_impact(self, day, season, game_df, player_df, box_score_df, save = True):
+    def compute_impact(self, day, season, game_df, player_df, box_score_df, injury_report, save = True):
+        injury_report_df = pd.DataFrame.from_records(injury_report)
+
         date_object = datetime.strptime(day, "%m/%d/%Y")
 
         metadata = self.get_impact_metadata(date_object, game_df)
@@ -368,6 +374,15 @@ class Impact(metaclass=SingletonMeta):
             # TODO: Remove this after a few games
             player_prediction_with_impact = player_prediction_without_impact + player_impact / 2
 
+            # Injury Report
+            player_ir_status = ''
+            player_ir_comment = ''
+            ir_player_df = injury_report_df[injury_report_df['PLAYER_ID'] == player_id]
+            if len(ir_player_df.index) > 0:
+                ir_player = ir_player_df.iloc[0]
+                player_ir_status = ir_player['IR_STATUS']
+                player_ir_comment = ir_player['IR_COMMENT']
+
             impact_table.append({
                 'PLAYER_ID': player_id,
                 'PLAYER_NAME': player_name,
@@ -400,6 +415,8 @@ class Impact(metaclass=SingletonMeta):
                 'NB_BACK_TO_BACK_PLAYED': nb_b2b_played,
                 'TTFL_PREDICTION': player_prediction_with_impact,
                 'TTFL_IMPACT': player_impact,
+                'IR_STATUS': player_ir_status,
+                'IR_COMMENT': player_ir_comment,
             })
 
         if save:

@@ -8,6 +8,7 @@ from nba_api.stats.endpoints import commonplayerinfo, commonteamroster
 import pandas as pd
 import sys
 
+
 class Players(metaclass=SingletonMeta):
     def __init__(self, database_filename='databases/players.xlsx', buffer_size=256):
         self.players = {}
@@ -24,7 +25,8 @@ class Players(metaclass=SingletonMeta):
             for player_id in player_id_list:
                 self.players[player_id] = existing_players[existing_players['PERSON_ID'] == player_id]
         except FileNotFoundError:
-            print("Failed to load existing player database: File " + self.database_filename + " not found.", file=sys.stderr)
+            print("Failed to load existing player database: File " + self.database_filename + " not found.",
+                  file=sys.stderr)
         except Exception as e:
             print("Failed to load existing player database: " + str(e), file=sys.stderr)
 
@@ -39,7 +41,11 @@ class Players(metaclass=SingletonMeta):
             print("[Player] Retrieve info for player: " + str(player_id))
             player_info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
             player_info_df = player_info.get_data_frames()[0]
-            player_info_df = player_info_df.drop(columns=['DISPLAY_FIRST_LAST', 'DISPLAY_LAST_COMMA_FIRST', 'DISPLAY_FI_LAST', 'PLAYER_SLUG', 'LAST_AFFILIATION', 'ROSTERSTATUS', 'GAMES_PLAYED_CURRENT_SEASON_FLAG', 'TEAM_CODE', 'TEAM_CITY', 'PLAYERCODE', 'FROM_YEAR', 'TO_YEAR', 'DLEAGUE_FLAG', 'NBA_FLAG', 'GAMES_PLAYED_FLAG'])
+            player_info_df = player_info_df.drop(
+                columns=['DISPLAY_FIRST_LAST', 'DISPLAY_LAST_COMMA_FIRST', 'DISPLAY_FI_LAST', 'PLAYER_SLUG',
+                         'LAST_AFFILIATION', 'ROSTERSTATUS', 'GAMES_PLAYED_CURRENT_SEASON_FLAG', 'TEAM_CODE',
+                         'TEAM_CITY', 'PLAYERCODE', 'FROM_YEAR', 'TO_YEAR', 'DLEAGUE_FLAG', 'NBA_FLAG',
+                         'GAMES_PLAYED_FLAG'])
             self.players[player_id] = player_info_df
 
         return self.players[player_id]
@@ -99,7 +105,8 @@ class Players(metaclass=SingletonMeta):
 
                 initial_team_id = player['TEAM_ID'].values[0]
                 if initial_team_id != team_id:
-                    print("[Players] Player " + str(player_id) + " found in the wrong team (" + str(initial_team_id) + " instead of " + str(team_id) + ")")
+                    print("[Players] Player " + str(player_id) + " found in the wrong team (" + str(
+                        initial_team_id) + " instead of " + str(team_id) + ")")
                     player['TEAM_ID'] = team_id
                     has_change = True
 
@@ -109,3 +116,13 @@ class Players(metaclass=SingletonMeta):
             self.save_database()
 
         return pd.concat(all_player_info)
+
+    def get_player_id_by_name(self, player_name):
+        all_players_df = pd.concat(self.players.values())
+        all_players_df["FULL_NAME"] = all_players_df['FIRST_NAME'] + " " + all_players_df['LAST_NAME']
+
+        players = all_players_df[all_players_df['FULL_NAME'] == player_name]
+        if len(players.index) > 0:
+            return players.iloc[0]['PERSON_ID']
+
+        return None
