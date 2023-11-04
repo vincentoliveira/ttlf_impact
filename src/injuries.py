@@ -1,8 +1,8 @@
 # TTFL Lab Impact
 #
-# Games
+# Injuries
 #
-# Fetch Game Information
+# Fetch Injury Report
 
 from src.singleton_meta import SingletonMeta
 from src.players import Players

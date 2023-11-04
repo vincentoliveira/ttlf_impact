@@ -45,6 +45,8 @@ class Impact(metaclass=SingletonMeta):
             out_players_df.to_excel(writer, index=False, sheet_name="out_players")
             metadata_df.to_excel(writer, index=False, sheet_name="metadata")
 
+        return filename
+
     def date_to_french_string(self, date_obj):
         # Define the French month names
         months = [
@@ -195,7 +197,7 @@ class Impact(metaclass=SingletonMeta):
                 + 0.3 * center_forward_score \
                 + 0.1 * forward_center_score
 
-    def compute_impact(self, day, season, game_df, player_df, box_score_df, injury_report, save = True):
+    def compute_impact(self, day, season, game_df, player_df, box_score_df, injury_report):
         injury_report_df = pd.DataFrame.from_records(injury_report)
 
         date_object = datetime.strptime(day, "%m/%d/%Y")
@@ -418,8 +420,5 @@ class Impact(metaclass=SingletonMeta):
                 'IR_STATUS': player_ir_status,
                 'IR_COMMENT': player_ir_comment,
             })
-
-        if save:
-            self.save_impact(day, impact_table, metadata)
 
         return impact_table

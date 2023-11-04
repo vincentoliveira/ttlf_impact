@@ -1,0 +1,10 @@
+version: '3.4'
+
+services:
+  ttlf_impact:
+    ports:
+      - 8080:8080
+    build:
+      context: .
+    volumes:
+      - .:/app

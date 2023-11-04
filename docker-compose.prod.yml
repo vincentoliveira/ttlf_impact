@@ -1,0 +1,22 @@
+version: '3.4'
+
+services:
+  ttlf_impact:
+    build:
+      context: .
+    volumes:
+      - .:/app
+    ports:
+      - 8082:8080
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-https.rule=Host(`${DOMAIN_NAME:-ttlf-impact.webyn.tech}`)
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-https.entrypoints=secure
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-https.tls=true
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-https.tls.certresolver=myresolver
+      - traefik.http.services.${SERVICE_NAME:-ttlf-impact}-https.loadbalancer.server.port=8082
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-http.middlewares=${SERVICE_NAME:-ttlf-impact}-https
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-http.entrypoints=web
+      - traefik.http.routers.${SERVICE_NAME:-ttlf-impact}-http.rule=Host(`${DOMAIN_NAME:-ttlf-impact.webyn.tech}`)
+      - traefik.http.middlewares.${SERVICE_NAME:-ttlf-impact}-https.redirectscheme.scheme=https
