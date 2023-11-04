@@ -59,14 +59,12 @@ class Impact(metaclass=SingletonMeta):
         return french_date_string
 
     def get_impact_metadata(self, date_obj, game_df):
-        deck_number_url = "http://api-ttfl.yanisguerault.fr/getCurrentDeck"
-        deck_number_response = requests.get(deck_number_url)
-        deck_number = deck_number_response.text if deck_number_response else 0
         return {
             "date": self.date_to_french_string(date_obj),
             "nb_games": len(game_df.index),
-            "deck": "Deck #" + str(deck_number),
-            "pick": "Pick #1",
+            "day": date_obj.day,
+            "month": date_obj.month,
+            "year": date_obj.year,
         }
 
     def compute_team_position_impact(self, game_df, box_score_df):
@@ -252,12 +250,8 @@ class Impact(metaclass=SingletonMeta):
                                                 & (player_box_score['SEASON_TYPE'] == 'RegularSeason')
                                                 & (player_box_score['MIN'] != 0)]
 
-            # TODO: remove after 15 days season
-            matched_box_score = player_box_score[(player_box_score['SEASON'] == season)
-                                                 & (player_box_score['MIN'] != 0)]
-
-            last_ten_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= ten_days_ago]
-            last_thirty_days_box_score = matched_box_score[matched_box_score['GAME_DATE'] >= thirty_days_ago]
+            last_ten_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= ten_days_ago]
+            last_thirty_days_box_score = season_box_score[season_box_score['GAME_DATE'] >= thirty_days_ago]
             season_average = season_box_score['TTFL_SCORE'].mean()
             last_ten_days_average = last_ten_days_box_score['TTFL_SCORE'].mean()
             last_thirty_days_average = last_thirty_days_box_score['TTFL_SCORE'].mean()
@@ -340,8 +334,14 @@ class Impact(metaclass=SingletonMeta):
             player_home_away = "H" if this_game_is_home else "A"
             home_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'HOME']
             away_box_score = season_box_score[season_box_score['HOME_AWAY'] == 'AWAY']
-            home_average = home_box_score['TTFL_SCORE'].mean()
-            away_average = away_box_score['TTFL_SCORE'].mean()
+            home_average = home_box_score['TTFL_SCORE'].mean() if len(home_box_score.index) > 0 else 0
+            away_average = away_box_score['TTFL_SCORE'].mean() if len(away_box_score.index) > 0 else 0
+
+            if home_average == 0:
+                home_average = away_average
+            elif away_average == 0:
+                away_average = home_average
+
             home_away_impact = home_average - season_average if this_game_is_home else away_average - season_average
             home_away_impact_uplift = home_away_impact / season_average if season_average != 0 else 0
 
@@ -365,7 +365,8 @@ class Impact(metaclass=SingletonMeta):
                             + (home_away_impact if home_away_impact else 0) \
                             + (player_b2b_impact if player_b2b_impact else 0)
 
-            player_prediction_with_impact = player_prediction_without_impact + player_impact
+            # TODO: Remove this after a few games
+            player_prediction_with_impact = player_prediction_without_impact + player_impact / 2
 
             impact_table.append({
                 'PLAYER_ID': player_id,
