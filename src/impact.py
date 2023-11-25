@@ -393,7 +393,7 @@ class Impact(metaclass=SingletonMeta):
 
                 if nb_b2b_played > 0:
                     player_b2b_average = player_b2b_box_score['TTFL_SCORE'].mean()
-                    player_b2b_impact = player_b2b_average - season_average
+                    player_b2b_impact = (player_b2b_average - season_average) / 2
                 else:
                     player_b2b_impact = 0
 
@@ -402,7 +402,7 @@ class Impact(metaclass=SingletonMeta):
                                                + 0.35 * (last_ten_days_average if last_ten_days_average else last_thirty_days_average)
             player_impact = opponent_position_impact \
                             + (home_away_impact if home_away_impact else 0) \
-                            + (player_b2b_impact / 2 if player_b2b_impact else 0)
+                            + (player_b2b_impact if player_b2b_impact else 0)
             player_impact_uplift = player_impact / season_average if season_average != 0 else 0
 
             player_prediction_with_impact = player_prediction_without_impact + player_impact
