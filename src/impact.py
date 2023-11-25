@@ -5,7 +5,6 @@
 # Compute Impact Table
 
 from src.singleton_meta import SingletonMeta
-from src.injuries import Injuries
 from datetime import datetime, timedelta
 import pandas as pd
 import sys
@@ -15,10 +14,17 @@ from numpy import *
 
 
 class Impact(metaclass=SingletonMeta):
-    def __init__(self, template_filename='./impact_template.xlsx', impact_filename='databases/impact_{day}.xlsx'):
+    def __init__(self,
+                 template_filename='./impact_template.xlsx',
+                 impact_filename='databases/impact_{day}.xlsx',
+                 weekly_template_filename='./weekly_template.xlsx',
+                 weekly_impact_filename='databases/weekly_{day}.xlsx',
+                 ):
         self.predictions = {}
         self.template_filename = template_filename
         self.impact_filename = impact_filename
+        self.weekly_template_filename = weekly_template_filename
+        self.weekly_impact_filename = weekly_impact_filename
 
     def save_impact(self, day, impact_table, metadata):
         date_object = datetime.strptime(day, "%m/%d/%Y")
@@ -28,7 +34,8 @@ class Impact(metaclass=SingletonMeta):
         shutil.copy(self.template_filename, filename)
 
         # load data
-        impact_df = pd.DataFrame.from_records(impact_table).sort_values(['TTFL_PREDICTION'], ascending=False)
+        impact_df = pd.DataFrame.from_records(impact_table).sort_values(['TTFL_PREDICTION_WITHOUT_IMPACT'],
+                                                                        ascending=False)
         metadata_df = pd.DataFrame.from_records([metadata])
 
         in_players_df = impact_df[impact_df['IR_STATUS'] != 'Out']
@@ -42,7 +49,30 @@ class Impact(metaclass=SingletonMeta):
                             ) as writer:
             print("Writing impact table file to: " + filename)
             in_players_df.to_excel(writer, index=False, sheet_name="impact_data")
-            out_players_df.to_excel(writer, index=False, sheet_name="out_players")
+            out_players_df.to_excel(writer, index=False, sheet_name="injuries")
+            metadata_df.to_excel(writer, index=False, sheet_name="metadata")
+
+        return filename
+
+    def save_weekly_impact(self, day, weekly_df, metadata):
+        date_object = datetime.strptime(day, "%m/%d/%Y")
+        filename = os.path.realpath(self.weekly_impact_filename.replace('{day}', date_object.strftime("%Y-%m-%d")))
+
+        # Copy Template to destination
+        shutil.copy(self.weekly_template_filename, filename)
+
+        # load data
+        impact_df = weekly_df.sort_values(['SEASON_AVG'], ascending=False)
+        metadata_df = pd.DataFrame.from_records([metadata])
+
+        # Update template copy
+        with pd.ExcelWriter(filename,
+                            engine='openpyxl',
+                            mode="a",
+                            if_sheet_exists="replace",
+                            ) as writer:
+            print("Writing impact table file to: " + filename)
+            impact_df.to_excel(writer, index=True, sheet_name="impact_data")
             metadata_df.to_excel(writer, index=False, sheet_name="metadata")
 
         return filename
@@ -67,7 +97,7 @@ class Impact(metaclass=SingletonMeta):
     def get_impact_metadata(self, date_obj, game_df):
         return {
             "date": self.date_to_french_string(date_obj),
-            "nb_games": len(game_df.index),
+            "nb_games": len(game_df.index) if game_df is not None else 0,
             "day": date_obj.day,
             "month": date_obj.month,
             "year": date_obj.year,
@@ -350,7 +380,8 @@ class Impact(metaclass=SingletonMeta):
             elif away_average == 0:
                 away_average = home_average
 
-            home_away_impact = home_average - season_average if this_game_is_home else away_average - season_average
+            home_away_diff = home_average - season_average if this_game_is_home else away_average - season_average
+            home_away_impact = home_away_diff / 2
             home_away_impact_uplift = home_away_impact / season_average if season_average != 0 else 0
 
             # Impact Back to Back
@@ -368,18 +399,20 @@ class Impact(metaclass=SingletonMeta):
 
             player_prediction_without_impact = 0.5 * season_average \
                                                + 0.15 * last_thirty_days_average \
-                                               + 0.35 * last_ten_days_average
+                                               + 0.35 * (last_ten_days_average if last_ten_days_average else last_thirty_days_average)
             player_impact = opponent_position_impact \
                             + (home_away_impact if home_away_impact else 0) \
-                            + (player_b2b_impact if player_b2b_impact else 0)
+                            + (player_b2b_impact / 2 if player_b2b_impact else 0)
+            player_impact_uplift = player_impact / season_average if season_average != 0 else 0
 
-            # TODO: Remove this after a few games
-            player_prediction_with_impact = player_prediction_without_impact + player_impact / 2
+            player_prediction_with_impact = player_prediction_without_impact + player_impact
 
             # Injury Report
             player_ir_status = ''
             player_ir_comment = ''
-            ir_player_df = injury_report_df[injury_report_df['PLAYER_ID'] == player_id]
+            ir_player_df = injury_report_df[injury_report_df['PLAYER_ID'] == player_id] \
+                if len(injury_report_df.index) > 0 \
+                else injury_report_df
             if len(ir_player_df.index) > 0:
                 ir_player = ir_player_df.iloc[0]
                 player_ir_status = ir_player['IR_STATUS']
@@ -419,6 +452,8 @@ class Impact(metaclass=SingletonMeta):
                 'TTFL_IMPACT': player_impact,
                 'IR_STATUS': player_ir_status,
                 'IR_COMMENT': player_ir_comment,
+                'TTFL_IMPACT_UPLIFT': player_impact_uplift,
+                'TTFL_PREDICTION_WITHOUT_IMPACT': player_prediction_without_impact,
             })
 
         return impact_table

@@ -162,12 +162,12 @@ class Games(metaclass=SingletonMeta):
         schedule_league_v2_response = requests.get(schedule_url)
         schedule_league_v2 = schedule_league_v2_response.json()
         today_game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2['leagueSchedule']['gameDates']))
-        if today_game_list == 0:
-            return []
+        if len(today_game_list) == 0:
+            return None
 
         game_list = today_game_list[0]['games']
         if len(game_list) == 0:
-            return []
+            return None
 
         today_games = self.enriched_game_list(self.current_season, filter_day, game_list)
         today_games_df = pd.DataFrame.from_dict(today_games.values())

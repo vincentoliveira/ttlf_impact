@@ -6,14 +6,15 @@
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python main.py  
+python main.py -f True 
 ```
 
 How to use command line
-```commandline
+```bash
 python main.py -d <day_to_generate> -f <force_refresh> -s <season> -t <season_type>
         <day_to_generate> mm/dd/yyyy (default: today)
         <force_refresh> True or False (default: False)
+        <weekly> True or False (default: False)
         <season> yyyy-yy (default: 2022-23)
         <season_type> RegularSeason, PlayOff (default: RegularSeason)
 ```
