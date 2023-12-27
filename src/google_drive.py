@@ -68,7 +68,3 @@ class GoogleDrive():
     def get_filename(self, day, weekly = False):
         date_object = datetime.strptime(day, "%m/%d/%Y")
         return self.impact_filename.replace('{day}', date_object.strftime("%Y-%m-%d"))
-
-if __name__ == "__main__":
-    google_drive = GoogleDrive()
-    google_drive.copy_impact_template('12/25/2023')

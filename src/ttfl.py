@@ -5,6 +5,7 @@
 # TTLF Impact Entry Points
 
 
+from src.discord import Discord
 from src.games import Games
 from src.impact import Impact
 from src.injuries import Injuries
@@ -57,13 +58,17 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
 
     gdrive = GoogleDrive()
     sheet_id = gdrive.copy_impact_template(day, False)
-    filename = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
 
     gdrive.write_impact_data(sheet_id, impact_table, metadata)
 
-    print("Successfully wrote impact on: ", filename)
+    print("Successfully wrote impact on: ", sheet_url)
 
-    return filename
+    discord = Discord()
+    discord.send_google_spreadsheets(sheet_url)
+    print("Successfully send impact to Discord")
+
+    return sheet_url
 
 
 def ttlf_lab_weekly_impact_start(day=None, season=None, season_type=None, force_refresh=False):
