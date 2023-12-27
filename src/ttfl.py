@@ -10,6 +10,7 @@ from src.impact import Impact
 from src.injuries import Injuries
 from src.players import Players
 from src.teams import Teams
+from src.google_drive import GoogleDrive
 from datetime import date
 from datetime import datetime, timedelta
 import pandas as pd
@@ -52,7 +53,13 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
     impact_table = impact.compute_impact(day, season, today_games_df, today_players_df, today_box_scores, injury_report)
     date_object = datetime.strptime(day, "%m/%d/%Y")
     metadata = impact.get_impact_metadata(date_object, today_games_df)
-    filename = impact.save_impact(day, impact_table, metadata)
+    #filename = impact.save_impact(day, impact_table, metadata)
+
+    gdrive = GoogleDrive()
+    sheet_id = gdrive.copy_impact_template(day, False)
+    filename = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+
+    gdrive.write_impact_data(sheet_id, impact_table, metadata)
 
     print("Successfully wrote impact on: ", filename)
 

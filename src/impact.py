@@ -6,6 +6,7 @@
 
 from src.singleton_meta import SingletonMeta
 from datetime import datetime, timedelta
+import math
 import pandas as pd
 import sys
 import os
@@ -397,9 +398,15 @@ class Impact(metaclass=SingletonMeta):
                 else:
                     player_b2b_impact = 0
 
+            last_thirty_days_average_prediction = last_thirty_days_average \
+                if not math.isnan(last_thirty_days_average) \
+                else season_average
+            last_ten_days_average_prediction = last_ten_days_average \
+                if not math.isnan(last_ten_days_average) \
+                else last_thirty_days_average_prediction
             player_prediction_without_impact = 0.5 * season_average \
-                                               + 0.15 * last_thirty_days_average \
-                                               + 0.35 * (last_ten_days_average if last_ten_days_average else last_thirty_days_average)
+                                               + 0.15 * last_thirty_days_average_prediction \
+                                               + 0.35 * last_ten_days_average_prediction
             player_impact = opponent_position_impact \
                             + (home_away_impact if home_away_impact else 0) \
                             + (player_b2b_impact if player_b2b_impact else 0)

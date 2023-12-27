@@ -3,3 +3,6 @@ databases*/
 venv/
 .idea/
 ~*
+.env
+credentials.json
+.env

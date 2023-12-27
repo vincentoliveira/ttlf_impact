@@ -3,7 +3,7 @@
 # Injuries
 #
 # Fetch Injury Report
-
+import re
 from src.singleton_meta import SingletonMeta
 from src.players import Players
 from bs4 import BeautifulSoup
@@ -61,6 +61,9 @@ class Injuries(metaclass=SingletonMeta):
                     row_status = status_cell.get_text()
                     comment = comment_cell.get_text()
                     status = compute_status(row_status, comment)
+
+                    comment_regex = r'^\w{3} \d{1,2}: '
+                    comment = re.sub(comment_regex, '', comment)
 
                     self.injury_report.append({
                         'PLAYER_ID': player_id,
