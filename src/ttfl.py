@@ -18,6 +18,17 @@ import pandas as pd
 import sys
 
 
+def ttlf_force_refresh(season=None):
+    if not season:
+        season = "2023-24"
+
+    teams = Teams()
+    players = Players()
+    games = Games(season)
+
+    refresh_databases(season, games, teams, players, force_refresh=True)
+
+
 def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh=False):
     if not day:
         day = date.today().strftime("%m/%d/%Y")
@@ -54,7 +65,7 @@ def ttlf_lab_impact_start(day=None, season=None, season_type=None, force_refresh
     impact_table = impact.compute_impact(day, season, today_games_df, today_players_df, today_box_scores, injury_report)
     date_object = datetime.strptime(day, "%m/%d/%Y")
     metadata = impact.get_impact_metadata(date_object, today_games_df)
-    #filename = impact.save_impact(day, impact_table, metadata)
+    # filename = impact.save_impact(day, impact_table, metadata)
 
     gdrive = GoogleDrive()
     sheet_id = gdrive.copy_impact_template(day, False)
@@ -104,14 +115,16 @@ def ttlf_lab_weekly_impact_start(day=None, season=None, season_type=None, force_
         # 4. Compute prediction
         if today_games_df is None or len(today_games_df.index) == 0:
             print('No game for this date: ' + current_day)
-            impact_df = pd.DataFrame(columns=['PLAYER_ID', current_day + '_OPPONENT', current_day + '_HOME_AWAY', '_TTFL_IMPACT_UPLIFT'])
+            impact_df = pd.DataFrame(
+                columns=['PLAYER_ID', current_day + '_OPPONENT', current_day + '_HOME_AWAY', '_TTFL_IMPACT_UPLIFT'])
         else:
             today_team_ids = today_games_df['TEAM_HOME_ID'].tolist() + today_games_df['TEAM_AWAY_ID'].tolist()
             today_players_df = players.fetch_player_by_teams(today_team_ids, force_refresh=force_refresh)
             today_player_ids = today_players_df['PERSON_ID'].to_list()
             today_box_scores = games.get_box_scores_for_players(today_player_ids, current_day, season_type)
 
-            impact_table = impact.compute_impact(current_day, season, today_games_df, today_players_df, today_box_scores,
+            impact_table = impact.compute_impact(current_day, season, today_games_df, today_players_df,
+                                                 today_box_scores,
                                                  injury_report)
             impact_df = pd.DataFrame.from_records(impact_table)
             impact_df[current_day + '_OPPONENT'] = impact_df['OPPONENT']
@@ -131,8 +144,9 @@ def ttlf_lab_weekly_impact_start(day=None, season=None, season_type=None, force_
         day_impact_df = impact_df.drop(
             columns=['PLAYER_NAME', 'PLAYER_TEAM', 'BACK_TO_BACK', 'SEASON_AVG', '30_DAYS_AVG', '10_DAYS_AVG',
                      'IR_STATUS', 'IR_COMMENT'])
-        day_player_df = impact_df[['PLAYER_NAME', 'PLAYER_TEAM', 'BACK_TO_BACK', 'SEASON_AVG', '30_DAYS_AVG', '10_DAYS_AVG',
-                     'IR_STATUS', 'IR_COMMENT']]
+        day_player_df = impact_df[
+            ['PLAYER_NAME', 'PLAYER_TEAM', 'BACK_TO_BACK', 'SEASON_AVG', '30_DAYS_AVG', '10_DAYS_AVG',
+             'IR_STATUS', 'IR_COMMENT']]
         weekly_df = pd.concat([weekly_df, day_impact_df], axis=1)
         player_df = pd.concat([player_df, day_player_df])
 

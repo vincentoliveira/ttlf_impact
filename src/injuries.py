@@ -11,9 +11,6 @@ import requests
 
 
 def compute_status(status, comment):
-    if status == "Out":
-        return "Out"
-
     lower_comment = comment.lower()
     if "questionable" in lower_comment:
         return "Questionable"
@@ -21,6 +18,9 @@ def compute_status(status, comment):
         return "Probable"
     elif "doubt" in lower_comment:
         return "Doubtful"
+
+    if status == "Out":
+        return "Out"
 
     return "Questionable"
 

@@ -13,7 +13,6 @@ class Discord:
         self.webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
 
     def send_google_spreadsheets(self, spreadsheet_url):
-        print(spreadsheet_url)
         data = {
             "content": "Impact du jour: " + spreadsheet_url,
             "username": "Lucienne"

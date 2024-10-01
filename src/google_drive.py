@@ -4,9 +4,10 @@
 #
 # Google Drive Manager
 
+import gspread
+import io
 import os
 import os.path
-import gspread
 import numpy as np
 import pandas as pd
 
@@ -15,6 +16,7 @@ from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
 
 
 class GoogleDrive():
@@ -68,3 +70,27 @@ class GoogleDrive():
     def get_filename(self, day, weekly = False):
         date_object = datetime.strptime(day, "%m/%d/%Y")
         return self.impact_filename.replace('{day}', date_object.strftime("%Y-%m-%d"))
+
+    def download_file(self, google_drive_id, local_path):
+        SCOPES = ["https://www.googleapis.com/auth/drive",
+                  "https://www.googleapis.com/auth/drive.metadata"]
+        credentials = service_account.Credentials.from_service_account_file(self.gdrive_credentials_file, scopes=SCOPES)
+        try:
+            drive_service = build("drive", "v3", credentials=credentials)
+
+            request = drive_service.files().get_media(fileId=google_drive_id)
+            file = io.BytesIO()
+            downloader = MediaIoBaseDownload(file, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                print(f"Download {local_path} {int(status.progress() * 100)}.")
+
+            with open(local_path, "wb") as local_file:
+                local_file.write(file.getvalue())
+                local_file.close()
+
+            return True
+        except HttpError as error:
+            print(f"An error occurred: {error}")
+            return False

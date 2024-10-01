@@ -3,20 +3,34 @@
 # Players
 #
 # Fetch Player Information
-from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import commonplayerinfo, commonteamroster
+from src.google_drive import GoogleDrive
+from src.singleton_meta import SingletonMeta
+import os
 import pandas as pd
 import sys
 
 
 class Players(metaclass=SingletonMeta):
-    def __init__(self, database_filename='databases/players.xlsx', buffer_size=256):
+    def __init__(self,
+                 database_filename='databases/players.xlsx',
+                 players_drive_id='1CURvLEO5873L4oMxKuQA2tLtqxw8lsp6',
+                 buffer_size=256):
         self.players = {}
         self.database_filename = database_filename
+        self.players_drive_id = players_drive_id
         self.buffer_size = buffer_size
+
+        # download database file
+        self.download_database()
 
         # load initial database
         self.load_database()
+
+    def download_database(self):
+        if not os.path.isfile(self.database_filename):
+            drive = GoogleDrive()
+            drive.download_file(self.players_drive_id, self.database_filename)
 
     def load_database(self):
         try:

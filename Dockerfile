@@ -1,4 +1,4 @@
-FROM python:3
+FROM python:3.10
 
 WORKDIR /app
 
@@ -7,11 +7,12 @@ WORKDIR /app
 COPY requirements.txt ./
 
 # Install production dependencies.
-RUN pip install --upgrade pip; \
-    set -ex; \
+RUN set -ex; \
     pip install -r requirements.txt; \
     pip install gunicorn
 
 COPY . /app
+
+RUN mkdir -p /app/databases
 
 CMD exec gunicorn --log-file=- --bind :8080 --workers 1 --threads 8 app:app

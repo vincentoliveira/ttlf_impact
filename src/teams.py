@@ -3,19 +3,32 @@
 # Teams
 #
 # Fetch Team Information
-from src.singleton_meta import SingletonMeta
 from nba_api.stats.endpoints import teaminfocommon
+from src.google_drive import GoogleDrive
+from src.singleton_meta import SingletonMeta
+import os
 import pandas as pd
 import sys
 
 
 class Teams(metaclass=SingletonMeta):
-    def __init__(self, database_filename='databases/teams.xlsx'):
+    def __init__(self,
+                 database_filename='databases/teams.xlsx',
+                 teams_drive_id='1nMRdJd0lfw355OSEKEx3ZA-Xxt1A_N5x'):
         self.teams = {}
         self.database_filename = database_filename
+        self.teams_drive_id = teams_drive_id
+
+        # download database file
+        self.download_database()
 
         # load initial database
         self.load_database()
+
+    def download_database(self):
+        if not os.path.isfile(self.database_filename):
+            drive = GoogleDrive()
+            drive.download_file(self.teams_drive_id, self.database_filename)
 
     def load_database(self):
         try:

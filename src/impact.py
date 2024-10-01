@@ -358,11 +358,13 @@ class Impact(metaclass=SingletonMeta):
             if not isinstance(player_position, str):
                 continue
 
+            if not player_position or player_position == '':
+                continue
+
             player_position_short = self.get_position_short(player_position)
             opponent_position_score_table = team_position_impact_table[opponent_team_id]
             opponent_position_score = self.get_team_position_score(player_position, opponent_position_score_table)
-            global_position_score = global_position_impact_table[
-                player_position] if not global_position_impact_table.empty else 0
+            global_position_score = global_position_impact_table[player_position] if not global_position_impact_table.empty else 0
 
             opponent_position_impact = opponent_position_score - global_position_score
             opponent_position_impact_uplift = opponent_position_impact / global_position_score \

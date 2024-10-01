@@ -9,6 +9,13 @@ pip install -r requirements.txt
 python main.py -f True 
 ```
 
+or with Docker
+
+```
+docker build -f Dockerfile -t ttlf-impact .
+docker run python ttlf-impact main.py -f True 
+```
+
 How to use command line
 ```bash
 python main.py -d <day_to_generate> -f <force_refresh> -s <season> -t <season_type>

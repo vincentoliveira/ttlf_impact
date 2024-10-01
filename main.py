@@ -20,12 +20,13 @@ def print_help():
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hd:f:s:t:w:",
-                                   ["help", "day=", "force-refresh=", "season=", "season-type=", "weekly="])
+        opts, args = getopt.getopt(sys.argv[1:], "hrfwd:s:t:",
+                                   ["help", "refresh-only", "force-refresh", "weekly", "day=", "season=", "season-type="])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
 
+    arg_refresh_only = False
     arg_force_refresh = False
     arg_day = None
     arg_season = None
@@ -33,21 +34,25 @@ if __name__ == '__main__':
     arg_weekly = False
 
     for opt, arg in opts:
-        if opt in ("-d", "--day"):
-            arg_day = arg
+        if opt in ("-r", "--refresh-only"):
+            arg_refresh_only = True
         elif opt in ("-f", "--force-refresh"):
-            arg_force_refresh = bool(arg)
+            arg_force_refresh = True
+        elif opt in ("-w", "--weekly"):
+            arg_weekly = True
+        elif opt in ("-d", "--day"):
+            arg_day = arg
         elif opt in ("-s", "--season"):
             arg_season = arg
         elif opt in ("-t", "--season-type"):
             arg_season_type = arg
-        elif opt in ("-w", "--weekly"):
-            arg_weekly = bool(arg)
         else:
             print_help()
             sys.exit()
 
-    if arg_weekly:
+    if arg_refresh_only:
+        ttlf_force_refresh(season=arg_season)
+    elif arg_weekly:
         ttlf_lab_weekly_impact_start(day=arg_day, season=arg_season, season_type=arg_season_type,
                                      force_refresh=arg_force_refresh)
     else:

@@ -4,38 +4,65 @@
 #
 # Fetch Game Information
 
-from src.singleton_meta import SingletonMeta
+from datetime import date, datetime, timedelta
 from nba_api.stats.endpoints import leaguegamefinder, boxscoretraditionalv2
 from nba_api.stats.library.parameters import LeagueIDNullable
+from src.google_drive import GoogleDrive
+from src.singleton_meta import SingletonMeta
 from src.players import Players
 from src.teams import Teams
+import os
 import re
 import requests
 import pandas as pd
 import sys
-from datetime import date, datetime, timedelta
+
 
 class Games(metaclass=SingletonMeta):
     def __init__(self,
-                 current_season='2022-23',
+                 current_season='2023-24',
+                 last_season='2022-23',
                  box_score_database_filename='databases/box_scores_{season}.xlsx',
                  calendar_database_filename='databases/calendar_{season}.xlsx',
+                 current_box_score_drive_id='1B7TGsiPLBKbYL2vIyh2l6q6Yg-yOwm1D',
+                 last_season_box_score_drive_id='1jis8uPKauoL8pGDLUa6W0EPBab7XNPAp',
                  buffer_size=256
                  ):
         self.box_scores = {}
         self.calendar = {}
         self.current_season = current_season
+        self.last_season = last_season
         self.box_score_database_filename = box_score_database_filename
         self.calendar_database_filename = calendar_database_filename
+        self.current_box_score_drive_id = current_box_score_drive_id
+        self.last_season_box_score_drive_id = last_season_box_score_drive_id
         self.buffer_size = buffer_size
+
+        # download database file
+        self.download_databases()
 
         # load initial database
         self.load_all_databases(current_season)
 
+    def download_databases(self):
+        print("[Download] Load all databases")
+        box_score_filename = self.box_score_database_filename.replace('{season}', self.current_season)
+        if not os.path.isfile(box_score_filename):
+            drive = GoogleDrive()
+            drive.download_file(self.current_box_score_drive_id, box_score_filename)
+
+        # load previous season for last matchups
+        box_score_filename = self.box_score_database_filename.replace('{season}', self.last_season)
+        if not os.path.isfile(box_score_filename):
+            drive = GoogleDrive()
+            drive.download_file(self.last_season_box_score_drive_id, box_score_filename)
+
     def load_all_databases(self, season):
+        print("[Games] Load all databases")
         self.load_calendar(season)
-        self.load_box_scores("2022-23")
         self.load_box_scores(season)
+        # load previous season for last matchups
+        self.load_box_scores("2022-23")
 
     def load_calendar(self, season):
         calendar_filename = self.calendar_database_filename.replace('{season}', season)
@@ -43,7 +70,8 @@ class Games(metaclass=SingletonMeta):
             existing_season_calendar_df = pd.read_excel(calendar_filename, dtype='object')
             self.calendar[season] = existing_season_calendar_df
         except FileNotFoundError:
-            print("Failed to load existing calendar database: File " + calendar_filename + " not found.", file=sys.stderr)
+            print("Failed to load existing calendar database: File " + calendar_filename + " not found.",
+                  file=sys.stderr)
         except Exception as e:
             print("Failed to load calendar score database: " + str(e), file=sys.stderr)
 
@@ -55,7 +83,8 @@ class Games(metaclass=SingletonMeta):
             for game_id in game_id_list:
                 self.box_scores[game_id] = existing_box_scores[existing_box_scores['GAME_ID'] == game_id]
         except FileNotFoundError:
-            print("Failed to load existing box score database: File " + box_score_filename + " not found.", file=sys.stderr)
+            print("Failed to load existing box score database: File " + box_score_filename + " not found.",
+                  file=sys.stderr)
         except Exception as e:
             print("Failed to load existing box score database: " + str(e), file=sys.stderr)
 
@@ -161,7 +190,8 @@ class Games(metaclass=SingletonMeta):
         schedule_url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
         schedule_league_v2_response = requests.get(schedule_url)
         schedule_league_v2 = schedule_league_v2_response.json()
-        today_game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day), schedule_league_v2['leagueSchedule']['gameDates']))
+        today_game_list = list(filter(lambda game_date: game_date['gameDate'].startswith(day),
+                                      schedule_league_v2['leagueSchedule']['gameDates']))
         if len(today_game_list) == 0:
             return None
 
@@ -277,7 +307,8 @@ class Games(metaclass=SingletonMeta):
         print("[Games] List game for season: " + season)
 
         if season not in self.calendar or force_refresh:
-            list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season, league_id_nullable=LeagueIDNullable.nba)
+            list_games = leaguegamefinder.LeagueGameFinder(season_nullable=season,
+                                                           league_id_nullable=LeagueIDNullable.nba)
             season_raw_game_df = list_games.get_data_frames()[0]
             season_games = self.enriched_season_game_list(season, season_raw_game_df)
 
@@ -309,13 +340,20 @@ class Games(metaclass=SingletonMeta):
             box_score_df['SEASON'] = game_info_df['SEASON_YEAR']
             box_score_df['SEASON_TYPE'] = game_info_df['SEASON_TYPE']
             box_score_df['MATCHUP'] = game_info_df['MATCHUP']
-            box_score_df['OPPONENT_TEAM_ID'] = box_score_df.apply(lambda player_box_score: away_team_id if player_box_score['TEAM_ID'] == home_id else home_id, axis=1)
-            box_score_df['OPPONENT_ABBREVIATION'] = box_score_df.apply(lambda player_box_score: away_abbreviation if player_box_score['TEAM_ID'] == home_id else home_abbreviation, axis=1)
-            box_score_df['HOME_AWAY'] = box_score_df.apply(lambda player_box_score: 'HOME' if player_box_score['TEAM_ID'] == home_id else 'AWAY', axis=1)
-            box_score_df['PLAYER_POSITION'] = box_score_df.apply(lambda player_box_score: players.get_player_position(player_box_score['PLAYER_ID']), axis=1)
-            box_score_df['BACK_TO_BACK'] = box_score_df.apply(lambda player_box_score: home_b2b if player_box_score['TEAM_ID'] == home_id else away_b2b, axis=1)
+            box_score_df['OPPONENT_TEAM_ID'] = box_score_df.apply(
+                lambda player_box_score: away_team_id if player_box_score['TEAM_ID'] == home_id else home_id, axis=1)
+            box_score_df['OPPONENT_ABBREVIATION'] = box_score_df.apply(
+                lambda player_box_score: away_abbreviation if player_box_score[
+                                                                  'TEAM_ID'] == home_id else home_abbreviation, axis=1)
+            box_score_df['HOME_AWAY'] = box_score_df.apply(
+                lambda player_box_score: 'HOME' if player_box_score['TEAM_ID'] == home_id else 'AWAY', axis=1)
+            box_score_df['PLAYER_POSITION'] = box_score_df.apply(
+                lambda player_box_score: players.get_player_position(player_box_score['PLAYER_ID']), axis=1)
+            box_score_df['BACK_TO_BACK'] = box_score_df.apply(
+                lambda player_box_score: home_b2b if player_box_score['TEAM_ID'] == home_id else away_b2b, axis=1)
 
-            box_score_df = box_score_df.drop(columns=['NICKNAME', 'START_POSITION', 'TEAM_CITY', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
+            box_score_df = box_score_df.drop(
+                columns=['NICKNAME', 'START_POSITION', 'TEAM_CITY', 'FG_PCT', 'FG3_PCT', 'FT_PCT'])
 
             self.box_scores[game_id] = box_score_df
 
@@ -387,5 +425,5 @@ class Games(metaclass=SingletonMeta):
             (all_box_scores_df['PLAYER_ID'].isin(player_id_list))
             & (all_box_scores_df['GAME_DATE'] < before_day)
             # To remove for early season
-            #& (all_box_scores_df['SEASON_TYPE'] == season_type)
-        ]
+            # & (all_box_scores_df['SEASON_TYPE'] == season_type)
+            ]
